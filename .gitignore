@@ -1,0 +1,28 @@
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 비밀 값
+.env
+.env.*
+!.env.example
+
+# app (React Native / Expo)
+node_modules/
+.expo/
+dist/
+web-build/
+*.log
+
+# server / data (Python)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# data: 원본·결과물은 깃에 올리지 않음 (공유 방법은 data/README.md 참고)
+data/raw/
+data/processed/
+data/vectordb/
