@@ -2,7 +2,7 @@
 
 
 ```text
-LifeLaw-Repo/
+.
 ├─ app/       React Native + Expo + TypeScript, 화면 11개
 ├─ server/    Python FastAPI 상담 API, 검색 및 선택적 RAG
 ├─ data/      국가법령정보 API 수집·전처리·SQLite 벡터DB 구축
@@ -14,7 +14,7 @@ LifeLaw-Repo/
 ## 1. 모바일 앱 실행 — 서버 없이 먼저 체험
 
 준비: Node.js 22.13 이상(검증 환경은 Node 24), npm, 휴대폰의 SDK 57 호환 Expo Go. 이 패키지는 SDK 57로 고정
-ZIP을 모두 압축 해제한 뒤 VS Code에서 `LifeLaw-Repo` 폴더를 열기. 터미널에서:
+VS Code에서 저장소 루트 폴더를 열기. 터미널에서:
 
 ```bash
 cd app
@@ -84,7 +84,7 @@ EXPO_PUBLIC_API_URL=http://192.168.0.10:8000
 
 ## 4. 판례 수집·전처리·벡터 DB
 
-인증값은 국가법령정보 공동활용에서 직접 신청·발급받아 `server/.env`의 `LAW_API_OC`에 입력합니다. 실제 인증값/판례 데이터/DB는 ZIP에 들어 있지 않습니다.
+인증값은 국가법령정보 공동활용에서 직접 신청·발급받아 `server/.env`의 `LAW_API_OC`에 입력합니다. 실제 인증값/판례 데이터/DB는 저장소에 들어 있지 않습니다.
 
 아래 명령은 **저장소 루트**에서 실행하며 Windows 기준입니다. macOS/Linux에서는 `server/.venv/Scripts/python.exe` 대신 `server/.venv/bin/python`을 사용하세요.
 
@@ -119,7 +119,7 @@ server/.venv/Scripts/python.exe data/scripts/build_index.py
 
 ## 6. 설치용 Android APK 빌드
 
-이 ZIP은 **소스 프로젝트**이며 완성 APK/IPA는 포함하지 않습니다. `app/eas.json`에는 Android APK용 preview 프로필이 준비되어 있습니다.
+이 저장소는 **소스 프로젝트**이며 완성 APK/IPA는 포함하지 않습니다. `app/eas.json`에는 Android APK용 preview 프로필이 준비되어 있습니다.
 
 ```bash
 cd app
@@ -156,4 +156,4 @@ npm run export:ios
 - 미포함: 서버 회원인증/JWT, 계정별 사건 DB, 원본 증거 업로드, 소셜 로그인, 이메일 복구, 푸시 알림, 실제 판례 말뭉치, 모델 파일, APK/IPA.
 - 사건은 이 기기의 AsyncStorage에 저장됩니다. 공용 기기에서 실제 법률상담 개인정보를 입력하지 마세요. 로그아웃해도 사건 기록은 기기에 남습니다.
 
-자세한 화면 목록은 `docs/SCREENS.md`, API는 `docs/API.md` 및 `docs/openapi.json`, 구성도는 `docs/ARCHITECTURE.md`를 참고하세요.
+자세한 화면 목록은 `docs/SCREENS.md`, API는 `docs/api.md` 및 `docs/openapi.json`, 구성도는 `docs/ARCHITECTURE.md`를 참고하세요.
