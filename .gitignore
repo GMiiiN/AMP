@@ -25,4 +25,4 @@ venv/
 # data: 원본·결과물은 깃에 올리지 않음 (공유 방법은 data/README.md 참고)
 data/raw/
 data/processed/
-data/vectordb/
+data/vector_db/
