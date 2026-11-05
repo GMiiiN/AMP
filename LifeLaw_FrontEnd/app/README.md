@@ -1,6 +1,6 @@
 # 생활법률 모바일 프론트엔드
 
-React Native + Expo SDK 57 + TypeScript. 실행/모바일 연결/서버 전환은 루트 `README.md`를 먼저 읽어 주세요.
+React Native + Expo SDK 58 + TypeScript. 실행/모바일 연결/서버 전환은 루트 `README.md`를 먼저 읽어 주세요.
 
 ```bash
 npm ci

@@ -14,12 +14,16 @@
     "android": {
       "package": "com.team22s.lifelaw",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#234A3C"
       },
       "softwareKeyboardLayoutMode": "resize"
     },
-    "plugins": ["expo-router", "expo-document-picker"],
+    "plugins": [
+      "expo-router",
+      "expo-document-picker",
+      "expo-font"
+    ],
     "experiments": {
       "typedRoutes": true
     }

@@ -13,7 +13,7 @@ LifeLaw-Repo/
 
 ## 1. 모바일 앱 실행 — 서버 없이 먼저 체험
 
-준비: Node.js 22.13 이상(검증 환경은 Node 24), npm, 휴대폰의 SDK 57 호환 Expo Go. 이 패키지는 SDK 57로 고정
+준비: Node.js 22.13 이상(검증 환경은 Node 24), npm, 휴대폰의 SDK 58 호환 Expo Go. 이 패키지는 SDK 58로 고정
 ZIP을 모두 압축 해제한 뒤 VS Code에서 `LifeLaw-Repo` 폴더를 열기. 터미널에서:
 
 ```bash
@@ -25,7 +25,7 @@ npm start
 - PC와 휴대폰을 같은 Wi-Fi에 연결하세요.
 - Android: Expo Go에서 터미널의 QR 코드를 스캔합니다.
 - iPhone: 카메라로 QR 코드를 스캔합니다. Expo Go의 요구에 따라 PC의 `npx expo login`과 앱을 같은 Expo 계정으로 로그인하세요.
-- SDK 호환 오류가 나면 https://expo.dev/go 에서 SDK 57 지원 여부/실행 방법을 확인하세요. Android에는 SDK별 Expo Go가 제공될 수 있으며 iPhone은 설치 가능한 Expo Go 버전에 따라 개발 빌드가 필요할 수 있습니다.
+- SDK 호환 오류가 나면 https://expo.dev/go 에서 SDK 58 지원 여부/실행 방법을 확인하세요. Android에는 SDK별 Expo Go가 제공될 수 있으며 iPhone은 설치 가능한 Expo Go 버전에 따라 개발 빌드가 필요할 수 있습니다.
 - Android 에뮬레이터: Android Studio의 가상 기기를 켜고 `npm run android`.
 - iOS 시뮬레이터: macOS와 Xcode에서 `npm run ios`.
 - Windows에서 iOS 시뮬레이터는 실행할 수 없습니다. 실물 iPhone 실행 경로를 이용하세요.
