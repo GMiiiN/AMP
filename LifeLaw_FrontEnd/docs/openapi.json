@@ -1,0 +1,305 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "생활법률 API",
+    "description": "모바일 프론트엔드와 연결하는 개발용 상담 API. 계정 인증·사건 서버 저장은 미포함.",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/categories": {
+      "get": {
+        "summary": "Categories",
+        "operationId": "categories_api_categories_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/consultations/questions": {
+      "post": {
+        "summary": "Questions",
+        "operationId": "questions_api_consultations_questions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsultationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/consultations/result": {
+      "post": {
+        "summary": "Result",
+        "operationId": "result_api_consultations_result_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsultationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsultationResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConsultationRequest": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "중고사기",
+              "전세사기",
+              "소음공해",
+              "교통사고",
+              "보이스피싱",
+              "폭행",
+              "임금체불",
+              "명예훼손",
+              "상속",
+              "기타"
+            ],
+            "title": "Category"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "amount": {
+            "type": "string",
+            "maxLength": 12,
+            "pattern": "^\\d*$",
+            "title": "Amount",
+            "default": ""
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Description"
+          },
+          "answers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Answers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "category",
+          "date",
+          "description"
+        ],
+        "title": "ConsultationRequest"
+      },
+      "ConsultationResult": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "demo",
+              "retrieval",
+              "rag"
+            ],
+            "title": "Mode"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "precedents": {
+            "items": {
+              "$ref": "#/components/schemas/Precedent"
+            },
+            "type": "array",
+            "title": "Precedents"
+          },
+          "notice": {
+            "type": "string",
+            "title": "Notice"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "summary",
+          "notice"
+        ],
+        "title": "ConsultationResult"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Precedent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "caseNumber": {
+            "type": "string",
+            "title": "Casenumber"
+          },
+          "court": {
+            "type": "string",
+            "title": "Court"
+          },
+          "judgmentDate": {
+            "type": "string",
+            "title": "Judgmentdate"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "sourceUrl": {
+            "type": "string",
+            "title": "Sourceurl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "caseNumber",
+          "court",
+          "judgmentDate",
+          "summary",
+          "sourceUrl"
+        ],
+        "title": "Precedent"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
