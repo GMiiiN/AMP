@@ -2,28 +2,15 @@
   "openapi": "3.1.0",
   "info": {
     "title": "생활법률 API",
-    "description": "모바일 프론트엔드와 연결하는 개발용 상담 API. 계정 인증·사건 서버 저장은 미포함.",
-    "version": "1.0.0"
+    "description": "판례 기반 실생활 법률 상담 앱의 서버 API. 상담 기록과 사건은 기기에 저장하며 서버에는 판례 색인만 둔다.",
+    "version": "1.1.0"
   },
   "paths": {
-    "/health": {
-      "get": {
-        "summary": "Health",
-        "operationId": "health_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/categories": {
       "get": {
+        "tags": [
+          "consultations"
+        ],
         "summary": "Categories",
         "operationId": "categories_api_categories_get",
         "responses": {
@@ -40,6 +27,9 @@
     },
     "/api/consultations/questions": {
       "post": {
+        "tags": [
+          "consultations"
+        ],
         "summary": "Questions",
         "operationId": "questions_api_consultations_questions_post",
         "requestBody": {
@@ -57,7 +47,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionsResponse"
+                }
               }
             }
           },
@@ -76,6 +68,9 @@
     },
     "/api/consultations/result": {
       "post": {
+        "tags": [
+          "consultations"
+        ],
         "summary": "Result",
         "operationId": "result_api_consultations_result_post",
         "requestBody": {
@@ -106,6 +101,22 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -158,6 +169,14 @@
             "type": "array",
             "maxItems": 3,
             "title": "Answers"
+          },
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "title": "Questions"
           }
         },
         "additionalProperties": false,
@@ -194,6 +213,21 @@
           "notice": {
             "type": "string",
             "title": "Notice"
+          },
+          "searchMethod": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "embedding",
+                  "tfidf"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searchmethod"
           }
         },
         "type": "object",
@@ -259,6 +293,33 @@
           "sourceUrl"
         ],
         "title": "Precedent"
+      },
+      "QuestionsResponse": {
+        "properties": {
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 3,
+            "minItems": 3,
+            "title": "Questions"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "generated",
+              "template"
+            ],
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "questions",
+          "mode"
+        ],
+        "title": "QuestionsResponse"
       },
       "ValidationError": {
         "properties": {
