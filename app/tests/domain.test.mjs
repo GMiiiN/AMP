@@ -6,6 +6,8 @@ import {
   validDate,
   makeCase,
   validateAccount,
+  draftQuestions,
+  questions,
 } from "../src/domain/model.ts";
 const good = () => ({
   ...emptyDraft(),
@@ -85,4 +87,27 @@ test("account rejects missing consent and password mismatch", () => {
     ]),
     "",
   );
+});
+test("answers pair with the questions received, or the category template", () => {
+  const generated = ["계약서를 받으셨나요?", "퇴사하셨나요?", "무엇을 먼저 정리할까요?"];
+  assert.deepEqual(draftQuestions({ category: "임금체불" }), questions("임금체불"));
+  assert.deepEqual(
+    draftQuestions({ category: "임금체불", questions: generated }),
+    generated,
+  );
+  assert.deepEqual(
+    draftQuestions({ category: "임금체불", questions: ["하나뿐"] }),
+    questions("임금체불"),
+  );
+});
+test("saved cases keep generated questions only together with the result", () => {
+  const d = { ...good(), questions: ["가?", "나?", "다?"], questionMode: "generated" },
+    opts = { title: "급여", memo: "", deadline: "", keepEvidence: true, keepTodos: true };
+  const kept = makeCase(d, { ...opts, keepResult: true });
+  assert.deepEqual(kept.questions, ["가?", "나?", "다?"]);
+  assert.equal(kept.questionMode, "generated");
+  assert.notEqual(kept.questions, d.questions);
+  const dropped = makeCase(d, { ...opts, keepResult: false });
+  assert.equal(dropped.questions, undefined);
+  assert.deepEqual(dropped.answers, []);
 });
