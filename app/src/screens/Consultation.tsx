@@ -26,7 +26,7 @@ import { useApp } from "../state/AppProvider";
 import {
   categories,
   validateDraft,
-  questions,
+  draftQuestions,
   todoLabels,
   makeCase,
   emptyDraft,
@@ -35,6 +35,7 @@ import {
 import {
   consultationService,
   usesApi,
+  errorMessage,
   ConsultationResult,
 } from "../services/consultation";
 export function Situation() {
@@ -43,10 +44,21 @@ export function Situation() {
     [error, setError] = useState(""),
     [picking, setPicking] = useState(false);
   function patch(change: Partial<typeof d>) {
-    update((a) => ({
-      ...a,
-      draft: { ...a.draft, result: undefined, ...change },
-    }));
+    update((a) => {
+      // 상황 내용이 바뀌면 그에 맞춰 만든 추가 질문도 다시 받는다. 첨부 변경은 해당 없음.
+      const changed = (
+        ["category", "date", "amount", "description"] as const
+      ).some((k) => k in change && change[k] !== a.draft[k]);
+      return {
+        ...a,
+        draft: {
+          ...a.draft,
+          result: undefined,
+          ...(changed ? { questions: undefined, questionMode: undefined } : {}),
+          ...change,
+        },
+      };
+    });
   }
   async function pick() {
     setPicking(true);
@@ -210,27 +222,45 @@ export function Situation() {
 export function Questions() {
   const { data, update } = useApp(),
     [index, setIndex] = useState(0),
-    [list, setList] = useState<string[]>([]),
     [error, setError] = useState(""),
     [retry, setRetry] = useState(0);
   const d = data.draft;
+  const list = d.questions?.length === 3 ? d.questions : [];
+  const loaded = list.length > 0;
   useEffect(() => {
+    // 이미 받은 질문이 있으면 다시 요청하지 않는다(뒤로 갔다 와도 질문·답 유지).
+    if (loaded) return;
     let active = true;
     consultationService
       .getQuestions(d)
       .then((q) => {
-        if (active) setList(q);
+        if (!active) return;
+        setIndex(0);
+        // 질문이 새로 바뀌었으므로 이전 질문에 대한 답과 결과는 버린다.
+        update((a) => ({
+          ...a,
+          draft: {
+            ...a.draft,
+            questions: q.questions,
+            questionMode: q.mode,
+            answers: [],
+            result: undefined,
+          },
+        }));
       })
-      .catch(() => {
+      .catch((e) => {
         if (active)
           setError(
-            "질문을 불러오지 못했어요. 이전 화면에서 다시 시도해 주세요.",
+            errorMessage(
+              e,
+              "질문을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+            ),
           );
       });
     return () => {
       active = false;
     };
-  }, [d.category, retry]);
+  }, [loaded, retry]);
   function answer(value: string) {
     update((a) => {
       const answers = [...a.draft.answers];
@@ -264,7 +294,7 @@ export function Questions() {
           <Button
             label={index === 2 ? "정리 결과 보기" : "다음 질문"}
             onPress={() => next()}
-            disabled={!list.length}
+            disabled={!loaded}
           />
           <View style={s.row}>
             <Pressable
@@ -272,7 +302,7 @@ export function Questions() {
             >
               <Text style={s.link}>이전</Text>
             </Pressable>
-            <Pressable onPress={() => next(true)} disabled={!list.length}>
+            <Pressable onPress={() => next(true)} disabled={!loaded}>
               <Text style={s.link}>건너뛰기</Text>
             </Pressable>
           </View>
@@ -285,9 +315,11 @@ export function Questions() {
       />
       <Step current={1} />
       <Notice>
-        {usesApi
-          ? "서버의 분야별 질문으로 사실관계를 확인합니다."
-          : "분야별 체험 질문입니다. API 연결 전입니다."}
+        {!usesApi
+          ? "분야별 체험 질문입니다. API 연결 전입니다."
+          : d.questionMode === "generated"
+            ? "입력한 상황을 바탕으로 AI가 만든 질문이에요."
+            : "분야별 기본 질문으로 사실관계를 확인합니다."}
       </Notice>
       <Text style={s.badge}>
         {d.category} · 질문 {index + 1} / 3
@@ -301,8 +333,17 @@ export function Questions() {
           }}
         />
       </View>
-      {!list.length ? (
-        <ActivityIndicator />
+      {!loaded ? (
+        error ? null : (
+          <View style={{ gap: 8, marginBottom: 24 }}>
+            <ActivityIndicator />
+            {usesApi ? (
+              <Text style={[s.small, { textAlign: "center" }]}>
+                상황에 맞는 질문을 준비하고 있어요…
+              </Text>
+            ) : null}
+          </View>
+        )
       ) : (
         <Text style={[s.h1, { fontSize: 23, marginBottom: 24 }]}>
           {list[index]}
@@ -352,11 +393,15 @@ export function Questions() {
 }
 export function Result() {
   const { data, update } = useApp(),
-    [result, setResult] = useState<ConsultationResult | null>(null),
+    [result, setResult] = useState<ConsultationResult | null>(
+      data.draft.result || null,
+    ),
     [error, setError] = useState(""),
     [retry, setRetry] = useState(0);
   const d = data.draft;
   useEffect(() => {
+    // 받은 결과가 남아 있으면 다시 요청하지 않는다. 상황·답을 고치면 결과가 지워져 새로 받는다.
+    if (d.result) return;
     let active = true;
     consultationService
       .getResult(d)
@@ -366,10 +411,13 @@ export function Result() {
           update((a) => ({ ...a, draft: { ...a.draft, result: r } }));
         }
       })
-      .catch(() => {
+      .catch((e) => {
         if (active)
           setError(
-            "결과를 불러오지 못했어요. 서버 연결과 설정을 확인해 주세요.",
+            errorMessage(
+              e,
+              "결과를 불러오지 못했어요. 서버 연결과 설정을 확인해 주세요.",
+            ),
           );
       });
     return () => {
@@ -419,7 +467,14 @@ export function Result() {
           />
         </>
       ) : !result ? (
-        <ActivityIndicator />
+        <View style={{ gap: 8 }}>
+          <ActivityIndicator />
+          {usesApi ? (
+            <Text style={[s.small, { textAlign: "center" }]}>
+              관련 판례를 찾고 내용을 정리하고 있어요…
+            </Text>
+          ) : null}
+        </View>
       ) : (
         <>
           <Card>
@@ -433,8 +488,8 @@ export function Result() {
               {d.category} · {d.date}
               {d.amount ? ` · ${Number(d.amount).toLocaleString()}원` : ""}
             </Text>
-            {questions(d.category).map((q, i) => (
-              <View key={q}>
+            {draftQuestions(d).map((q, i) => (
+              <View key={`${i}-${q}`}>
                 <Text style={s.small}>{q}</Text>
                 <Text style={s.body}>{d.answers[i] || "건너뜀"}</Text>
               </View>
@@ -478,6 +533,11 @@ export function Result() {
                 </View>
               ))
             )}
+            {result.searchMethod === "tfidf" && result.precedents.length ? (
+              <Text style={s.small}>
+                의미 검색을 쓸 수 없어 키워드 검색으로 찾은 판례입니다.
+              </Text>
+            ) : null}
             <Text style={s.body}>{result.notice}</Text>
           </Card>
           <Card>

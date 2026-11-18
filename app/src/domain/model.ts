@@ -81,7 +81,10 @@ export type ConsultationResult = {
   summary: string;
   precedents: Precedent[];
   notice: string;
+  /** 판례 검색 방식. 임베딩을 못 쓰면 서버가 키워드(TF-IDF) 검색으로 대신한다. */
+  searchMethod?: "embedding" | "tfidf";
 };
+export type QuestionMode = "generated" | "template";
 export type Draft = {
   result?: ConsultationResult;
   caseId?: string;
@@ -90,6 +93,9 @@ export type Draft = {
   amount: string;
   description: string;
   answers: string[];
+  /** 추가 질문 화면에서 받은 질문 3개. 상황을 고치면 지우고 다시 받는다. */
+  questions?: string[];
+  questionMode?: QuestionMode;
   evidence: Evidence[];
   checks: boolean[];
 };
@@ -162,6 +168,10 @@ export function questions(category: string) {
     "지금 가장 먼저 정리하고 싶은 것은 무엇인가요?",
   ];
 }
+/** 답변과 짝지을 질문. 받은 질문이 없으면(예전 기록 등) 분야별 고정 질문. */
+export function draftQuestions(d: Pick<Draft, "category" | "questions">) {
+  return d.questions?.length === 3 ? d.questions : questions(d.category);
+}
 export function makeCase(
   draft: Draft,
   options: {
@@ -190,6 +200,9 @@ export function makeCase(
     result: options.keepResult ? draft.result : undefined,
     description: options.keepResult ? draft.description : "",
     answers: options.keepResult ? [...draft.answers] : [],
+    questions:
+      options.keepResult && draft.questions ? [...draft.questions] : undefined,
+    questionMode: options.keepResult ? draft.questionMode : undefined,
     evidence: options.keepEvidence ? [...draft.evidence] : [],
     checks: options.keepTodos ? [...draft.checks] : [false, false, false],
     history: [
