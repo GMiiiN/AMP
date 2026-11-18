@@ -1,45 +1,58 @@
-# FastAPI 명세
+# 서버 API 명세
 
-개발 기본 주소 `http://127.0.0.1:8000`. Swagger UI `/docs`, 기계 판독 명세 `/openapi.json`.
+개발 기본 주소 `http://127.0.0.1:8000`. Swagger UI `/docs`, 기계 판독 명세 `/openapi.json` (저장본 `docs/openapi.json`).
 
 앱과 서버가 이 문서의 형식을 기준으로 개발합니다. 형식을 바꿀 때는 이 문서를 먼저 고치고 팀에 알립니다.
+
+## 개요
 
 | 메서드 | 경로 | 용도 |
 |---|---|---|
 |GET|/health|서버 상태와 설정된 모드|
 |GET|/api/categories|분야 10개|
-|POST|/api/consultations/questions|분야별 질문 3개|
-|POST|/api/consultations/result|데모/검색/선택적 RAG 결과|
+|POST|/api/consultations/questions|추가 질문 3개|
+|POST|/api/consultations/result|상담 결과와 근거 판례|
 
-## 공통 상담 요청
+회원·인증 API는 계정 흐름 담당(이규형)이 추가합니다. 상담 API에 인증을 붙일 때도 이 문서에 함께 적습니다.
 
-```json
-{"category":"임금체불","date":"2026-01-01","amount":"20000","description":"급여 지급이 지연된 예시 상황입니다.","answers":["네","아니요","자료 확인"]}
-```
+사건·상담 기록은 기기(AsyncStorage)에 저장하므로 사건 API는 없습니다. 첨부 원본은 서버로 보내지 않습니다.
 
-category는 고정 분야 중 하나, date는 오늘 이전 실제 날짜, amount는 선택 숫자 문자열(최대 12자리), description은 공백 제외 내용 필요·최대 1,000자, answers는 최대 3개·각 1,000자입니다. 정의하지 않은 필드는 422입니다. 첨부 원본과 사용자 계정 정보를 이 API로 전송하지 않습니다.
+## 상담
 
-## 질문 응답
+### 공통 상담 요청
 
 ```json
-{"questions":["약속한 급여와 지급일을 확인할 수 있나요?","상대방에게 상황을 알리거나 대화를 시도했나요?","지금 가장 먼저 정리하고 싶은 것은 무엇인가요?"],"mode":"template"}
+{"category":"임금체불","date":"2026-01-01","amount":"20000","description":"급여 지급이 지연된 예시 상황입니다.","questions":["질문1","질문2","질문3"],"answers":["네","아니요","자료 확인"]}
 ```
 
-추가 질문은 분야별 템플릿입니다. AI 동적 질문 생성은 구현하지 않았습니다.
+- category는 고정 분야 중 하나, date는 오늘 이전 실제 날짜, amount는 선택 숫자 문자열(최대 12자리), description은 공백 제외 내용 필요·최대 1,000자.
+- answers는 최대 3개·각 1,000자. **questions는 선택**(최대 3개)이며, 질문 API로 받은 질문을 그대로 보내면 서버가 질문과 답을 짝지어 AI에 전달합니다. 생성 질문은 매번 다르므로 결과 요청 때 보내는 것을 권장합니다.
+- 정의하지 않은 필드는 422입니다. 첨부 원본과 사용자 계정 정보를 이 API로 보내지 않습니다.
+- 서버는 Gemini로 보내기 전에 전화번호·계좌번호·주민등록번호·이메일 형태의 문자열을 가립니다(SER-004).
 
-## 결과 응답
+### POST /api/consultations/questions → 200
 
 ```json
-{"mode":"demo","summary":"사용자가 입력한 내용","precedents":[],"notice":"판례 근거 없음: 데모 모드에서는 AI 분석과 판례 검색을 실행하지 않습니다."}
+{"questions":["근로계약서를 작성하셨나요?","퇴사하셨나요?","지금 가장 먼저 정리하고 싶은 것은 무엇인가요?"],"mode":"generated"}
 ```
 
-- mode=`demo`: 입력 내용 정리.
-- mode=`retrieval`: 실제 DB 검색 또는 근거 없음. 생성 모델 미사용.
-- mode=`rag`: 실제 검색 결과를 바탕으로 Ollama 모델 응답을 검증한 결과.
-- precedents 항목: `id`, `title`, `caseNumber`, `court`, `judgmentDate`, `summary`, `sourceUrl`.
-- `sourceUrl`은 국가법령정보센터 HTTPS 링크입니다. 임의 링크나 인증값 포함 URL은 전처리에서 거부합니다.
-- `기타`는 검색 및 모델 호출을 하지 않습니다.
-- 점수 기준을 넘는 근거가 없으면 법률 결론을 생성하지 않습니다.
+- 질문은 항상 3개입니다. 1·2번은 Gemini가 상황을 보고 만든 "네/아니요" 확인 질문, 3번은 고정 질문입니다.
+- `mode=generated`: AI 생성. `mode=template`: 데모 모드, AI 미설정, 또는 생성 실패 시 분야별 고정 질문. 질문 생성 실패는 오류로 돌려주지 않고 고정 질문으로 대체합니다.
+
+### POST /api/consultations/result → 200
+
+```json
+{"mode":"rag","summary":"AI가 정리한 요약","precedents":[{"id":"...","title":"...","caseNumber":"...","court":"대법원","judgmentDate":"2020-01-01","summary":"판결요지","sourceUrl":"https://www.law.go.kr/..."}],"notice":"법률정보 제공이며 자문이 아닙니다. AI 요약은 원문 대조 및 전문가 검토가 필요합니다.","searchMethod":"embedding"}
+```
+
+- mode=`demo`: 입력 내용 정리(외부 호출 없음).
+- mode=`retrieval`: 판례 검색 결과만 반환하거나 근거 없음. AI 미설정.
+- mode=`rag`: 검색된 판례를 근거로 Gemini가 만든 답변. AI가 인용한 판례만 `precedents`에 남깁니다. 검색 결과에 없는 인용 ID는 거부합니다.
+- `searchMethod`(선택 필드): `embedding` 의미 검색 또는 `tfidf` 문자 검색. 임베딩을 쓸 수 없으면 `tfidf`로 대체합니다. 검색을 하지 않으면 없습니다.
+- `sourceUrl`은 국가법령정보센터 HTTPS 링크입니다.
+- `기타`: 판례 검색을 하지 않습니다. rag 모드에서는 Gemini가 일반 법률 정보로 답하고, notice가 "판례 근거 없음"으로 시작합니다.
+- 기준 점수를 넘는 판례가 없으면 AI 답변을 만들지 않고 notice가 "판례 근거 없음"으로 시작합니다.
+- 앱의 해야 할 일(체크 3개)·도움받을 곳은 앱의 고정 내용을 씁니다.
 
 ## 오류
 
@@ -47,14 +60,15 @@ category는 고정 분야 중 하나, date는 오늘 이전 실제 날짜, amoun
 {"error":{"code":"VALIDATION_ERROR","message":"입력 항목과 형식을 확인해 주세요."}}
 ```
 
-| 상태 | 상황 |
-|---|---|
-|422|입력 검증 실패, 입력 원문을 오류에 반사하지 않음|
-|503|RAG DB 미구축/읽기 오류, 모드 설정 오류|
-|502|모델 통신 실패, JSON 형식 오류, 검색되지 않은 인용 ID|
+`message`는 사용자에게 그대로 보여 줄 수 있는 문구입니다. 오류 응답에 입력 원문을 넣지 않습니다.
 
-모바일 HTTP 제한 시간은 60초, 모델 요청은 45초입니다. API 실패를 자동 데모 성공으로 바꾸지 않고 재시도 화면을 표시합니다. 입력 데이터는 기기에 유지합니다.
+| 상태 | code | 상황 |
+|---|---|---|
+|404|NOT_FOUND|없는 경로|
+|422|VALIDATION_ERROR|입력 검증 실패|
+|500|SERVER_ERROR|예상하지 못한 서버 오류|
+|502|AI_UNAVAILABLE|Gemini 호출 실패(한도 초과 포함). 서버가 1회 재시도한 뒤에도 실패. 앱은 "다시 시도"를 표시|
+|503|INDEX_UNAVAILABLE|판례 색인 미구축·읽기 오류|
+|503|CONFIG_ERROR|서버 모드 설정 오류|
 
-## 인증 및 저장 범위
-
-현재 인증 헤더가 없는 개발 API입니다. 회원가입/로그인/사건 CRUD/증거 업로드 API는 아직 제공하지 않습니다. 해당 UI는 체험 계정 또는 기기 저장을 사용합니다.
+제한 시간: 앱 60초, Gemini 요청 45초(`GEMINI_TIMEOUT_MS`). API 실패를 데모 결과로 바꾸지 않고 재시도 화면을 표시합니다. 입력 데이터는 기기에 유지합니다(QUR-005).

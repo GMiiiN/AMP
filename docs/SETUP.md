@@ -96,26 +96,29 @@ server/.venv/Scripts/python.exe data/scripts/collect.py --category 임금체불 
 
 ```powershell
 server/.venv/Scripts/python.exe data/scripts/preprocess.py data/raw/wages.jsonl
-server/.venv/Scripts/python.exe data/scripts/build_index.py
+server/.venv/Scripts/python.exe data/scripts/build_index.py --embed
 ```
 
 - 전처리는 미검토 행을 제외하고 HTML/중복을 정리합니다.
 - 판시사항·판결요지 중심으로 저장하며 판결 전문은 저장하지 않습니다.
-- `data/vector_db/precedents.sqlite3`에 벡터와 메타데이터를 저장합니다.
-- 기본 검색은 한국어 문자 2~4그램 TF-IDF + 코사인 유사도입니다. **의미 임베딩 모델이 아니며**, 소규모 과제용 기준 구현입니다. 분야 내 검색만 수행합니다.
+- `data/vector_db/precedents.sqlite3`에 판례 메타데이터, TF-IDF 벡터, 임베딩 벡터를 저장합니다.
+- `--embed`는 `server/.env`의 `GEMINI_API_KEY`로 `gemini-embedding-001`(768차원) 임베딩을 함께 저장합니다. 빼면 TF-IDF만 저장하며 외부 호출이 없습니다.
+- 검색은 임베딩 코사인 유사도(의미 검색)가 기본이고, 임베딩을 쓸 수 없으면 문자 2~4그램 TF-IDF로 대체합니다. 분야 내 검색만 수행합니다.
 - `기타`는 검색하지 않습니다. 결과가 없으면 근거 없음 상태를 반환합니다.
 
-## 5. RAG 선택 실행
+## 5. RAG 실행 (Gemini)
 
-`server/.env`를 `CONSULTATION_MODE=rag`로 바꾸고 서버를 다시 시작합니다.
+`server/.env`를 `CONSULTATION_MODE=rag`로 바꾸고 `GEMINI_API_KEY`를 넣은 뒤 서버를 다시 시작합니다.
 
-- `OLLAMA_MODEL`이 비어 있으면 실제 DB 검색 결과와 원문 메타데이터를 반환합니다. AI 요약은 하지 않습니다.
-- 로컬 Ollama를 설치하고 사용할 모델을 준비한 경우 `OLLAMA_URL`과 `OLLAMA_MODEL`을 설정하면 **검색 → 근거 프롬프트 구성 → 모델 생성 → JSON/인용 ID 검증** 흐름이 실행됩니다.
-- 모델은 자동 다운로드하지 않습니다. 모델 선택은 PC 메모리와 성능에 따라 달라집니다.
-- 근거 없음 상태에서는 생성 모델을 호출하지 않습니다.
+- `GEMINI_API_KEY`가 비어 있으면 질문은 분야별 고정 질문, 결과는 TF-IDF 검색 결과와 원문 메타데이터만 반환합니다.
+- 키가 있으면 **추가 질문 생성 → 질의 임베딩 → 판례 검색 → 근거 프롬프트 구성 → Gemini 생성 → JSON/인용 ID 검증** 흐름이 실행됩니다.
+- Gemini로 보내기 전에 전화번호·계좌번호·주민등록번호·이메일 형태의 문자열을 가립니다.
+- 호출이 실패하거나 한도를 넘으면 1회 재시도하고, 그래도 실패하면 502 `AI_UNAVAILABLE`을 반환합니다(질문 생성은 고정 질문으로 대체).
+- 근거 없음 상태에서는 생성 모델을 호출하지 않습니다. `기타`는 판례 없이 일반 정보로 답합니다.
 - 답변의 인용 ID가 검색 결과에 없으면 오류로 처리합니다. 이 검증만으로 법률적 정확성을 보장하지는 않습니다.
+- 자세한 내용은 `server/README.md`, `docs/api.md`.
 
-실제 법제처 인증 및 Ollama 모델 실행은 이 환경에서 검증하지 않았습니다. 수집기는 공식 API 스키마에 맞춰 작성했으며 모델 어댑터는 모의 응답으로 검증했습니다.
+실제 법제처 인증과 Gemini 호출은 이 환경에서 검증하지 않았습니다. 수집기는 공식 API 스키마에 맞춰 작성했으며 Gemini 연계는 가짜 클라이언트로 검증했습니다.
 
 ## 6. 설치용 Android APK 빌드
 
@@ -151,7 +154,7 @@ npm run export:ios
 
 ## 구현 범위
 
-- 구현: 모바일 11개 화면, Expo Router 탭/스택, 기기 저장, 사건 CRUD·체크리스트·상담 결과 보관, 첨부파일 선택 및 메타데이터 보관, HTTP API 전환, FastAPI, 수집/전처리/벡터 검색, Ollama RAG 어댑터.
+- 구현: 모바일 11개 화면, Expo Router 탭/스택, 기기 저장, 사건 CRUD·체크리스트·상담 결과 보관, 첨부파일 선택 및 메타데이터 보관, HTTP API 전환, FastAPI, 수집/전처리/벡터 검색, Gemini RAG(추가 질문 생성·임베딩 검색·답변 생성).
 - 체험 구현: 회원가입·로그인. 비밀번호는 실행 메모리에만 유지하며 실제 인증 서버가 아닙니다. 앱 재시작 시 체험 계정을 다시 만들어야 합니다. 저장된 프로필은 UI 표시용입니다.
 - 미포함: 서버 회원인증/JWT, 계정별 사건 DB, 원본 증거 업로드, 소셜 로그인, 이메일 복구, 푸시 알림, 실제 판례 말뭉치, 모델 파일, APK/IPA.
 - 사건은 이 기기의 AsyncStorage에 저장됩니다. 공용 기기에서 실제 법률상담 개인정보를 입력하지 마세요. 로그아웃해도 사건 기록은 기기에 남습니다.

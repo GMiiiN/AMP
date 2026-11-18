@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'server'))
-from app.models import CATEGORIES
+from app.schemas import CATEGORIES
 
 
 def clean(value):
