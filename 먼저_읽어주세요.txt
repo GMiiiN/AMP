@@ -1,0 +1,13 @@
+﻿생활법률 React Native 모바일 앱 패키지
+
+1. ZIP을 모두 압축 해제
+2. Node.js 22.13 이상을 설치
+3. app 폴더에서 실행.bat를 실행하거나 터미널에 npm ci, npm start를 입력
+4. 같은 Wi-Fi에 연결한 휴대폰에서 SDK 57 호환 Expo Go로 QR을 스캔
+5. 전체 실행 안내/Expo Go 호환/API 연결은 루트 README.md
+
+폴더 구조:
+app    : React Native 모바일 화면 11개, 전체 TypeScript 소스
+server : FastAPI 상담 API와 검색·선택적 RAG
+ data  : 판례 수집, 전처리, SQLite 벡터DB 구축 스크립트
+ docs  : 화면/API/구조/검증 보고서
