@@ -1,6 +1,6 @@
 # 구현 시 확인한 공식 문서
 
-- Expo SDK 57: https://docs.expo.dev/versions/v57.0.0/
+- Expo SDK 58: https://docs.expo.dev/versions/v58.0.0/
 - Expo 프로젝트 생성/호환 안내: https://docs.expo.dev/get-started/create-a-project/
 - Expo Router 설치: https://docs.expo.dev/router/installation/
 - DocumentPicker: https://docs.expo.dev/versions/v57.0.0/sdk/document-picker/

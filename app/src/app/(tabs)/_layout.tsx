@@ -22,7 +22,7 @@ export default function TabLayout() {
           title: "생활법률",
           tabBarLabel: "홈",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" color={color} size={size} />
+            <Ionicons name="home-outline" color={color as string} size={size} />
           ),
         }}
       />
@@ -31,7 +31,7 @@ export default function TabLayout() {
         options={{
           title: "내 사건",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="folder-outline" color={color} size={size} />
+            <Ionicons name="folder-outline" color={color as string} size={size} />
           ),
         }}
       />
@@ -40,7 +40,7 @@ export default function TabLayout() {
         options={{
           title: "마이페이지",
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" color={color} size={size} />
+            <Ionicons name="person-outline" color={color as string} size={size} />
           ),
         }}
       />
