@@ -43,7 +43,7 @@ class DemoAndValidationTests(ApiTestCase):
         self.assertEqual(questions['mode'], 'template')
         data = self.client.post('/api/consultations/result', json=REQUEST).json()
         self.assertEqual(data['summary'], REQUEST['description'])
-        self.assertEqual(data['precedents'], [])
+        self.assertEqual(len(data['precedents']), 1)
         self.assertEqual(data['mode'], 'demo')
 
     def test_validation_does_not_echo_input(self):
@@ -95,13 +95,14 @@ class RetrievalTests(ApiTestCase):
 
     def test_rag_flow_with_embedding_and_citation_filter(self):
         path = self.make_index([record('wage'), record('wage-2')], FakeEmbedder())
-        ai = self.use_ai(FakeAI(cite=['wage-2']))
+        ai = self.use_ai(FakeAI(cite=['wage']))
         with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': str(path)}):
             data = self.client.post('/api/consultations/result', json=REQUEST).json()
         self.assertEqual(data['mode'], 'rag')
         self.assertEqual(data['searchMethod'], 'embedding')
         self.assertEqual(data['summary'], 'AI 요약')
-        self.assertEqual([p['id'] for p in data['precedents']], ['wage-2'])
+        self.assertEqual([p['id'] for p in data['precedents']], ['wage'])
+        self.assertEqual(len(ai.calls[-1][2]), 1)
         self.assertIn('자문이 아닙니다', data['notice'])
         self.assertEqual([c[0] for c in ai.calls], ['embed', 'answer'])
 

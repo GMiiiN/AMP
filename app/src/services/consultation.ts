@@ -1,3 +1,4 @@
+import { localMatch } from "./localMatch";
 import {
   Draft,
   questions,
@@ -19,11 +20,11 @@ export const demoConsultation: ConsultationService = {
     return {
       mode: "demo",
       summary: draft.description,
-      precedents: [],
+      precedents: localMatch(draft.category, draft.description),
       notice:
         draft.category === "기타"
           ? "기타 분야는 판례 검색 대상에서 제외됩니다."
-          : "판례 검색 API 연결 전이므로 확인된 근거 판례가 없습니다.",
+          : "수록된 판례 90건 중 입력한 상황과 표현이 유사한 1건을 찾습니다. 법적 적용 여부를 판단한 결과는 아닙니다.",
     };
   },
 };
@@ -129,7 +130,7 @@ const apiConsultation: ConsultationService = {
       )
         throw Error("판례 출처 형식을 확인하지 못했습니다.");
     }
-    return r;
+    return { ...r, precedents: r.precedents.slice(0, 1) };
   },
 };
 export const consultationService = usesApi ? apiConsultation : demoConsultation;

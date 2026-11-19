@@ -8,6 +8,7 @@ from ..repositories.vector_store import VectorStore
 from ..schemas import (CATEGORIES, FIRST_QUESTIONS, SECOND_QUESTION, THIRD_QUESTION, ConsultationRequest,
                        ConsultationResult, Precedent, QuestionsResponse)
 from . import rag
+from .catalog import search_catalog
 from .gemini import AiUnavailable, GeminiService
 
 logger = logging.getLogger('lifelaw')
@@ -38,7 +39,7 @@ async def make_result(request: ConsultationRequest, mode: str, ai: GeminiService
     if request.category == '기타':
         return await _other_category(request, mode, ai)
     if mode == 'demo':
-        return ConsultationResult(mode='demo', summary=request.description, notice='판례 근거 없음: 데모 모드에서는 AI 분석과 판례 검색을 실행하지 않습니다.')
+        return ConsultationResult(mode='demo', summary=request.description, precedents=[Precedent(**r) for r in search_catalog(request.category, request.description)], notice='수록 판례 90건에서 표현이 유사한 1건을 검색합니다. AI 분석은 포함되지 않습니다.')
 
     try:
         store = open_store()
