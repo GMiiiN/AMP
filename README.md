@@ -12,7 +12,7 @@
 
 ```
 .
-├─ app/      React Native(Expo) 앱 — 아직 없음. 아래 "앱 폴더 만들기" 참고
+├─ app/      React Native(Expo) 앱
 ├─ server/   Python 서버 (상담 API, 판례 검색, Gemini 호출)
 ├─ data/     판례 수집·전처리·벡터DB 생성 스크립트
 ├─ docs/     API 명세, 보고서, 다이어그램
@@ -27,14 +27,7 @@
 | `data/` | 판례 데이터 파이프라인 | 김민성 |
 | `docs/` | 명세·문서 | 공동 |
 
-## 앱 폴더 만들기
-
-`app/` 폴더는 Expo가 직접 생성하도록 비워 두었습니다. 레포 최상위에서 한 번만 실행하세요.
-(팀원 중 한 명이 만들어 올리고, 나머지는 pull 받으면 됩니다.)
-
-```bash
-npx create-expo-app@latest app
-```
+실행 방법은 [`docs/SETUP.md`](docs/SETUP.md)를 참고하세요.
 
 ## 작업 규칙
 
