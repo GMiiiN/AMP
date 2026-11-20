@@ -12,8 +12,8 @@ logger = logging.getLogger('lifelaw')
 
 
 def query_text(request: ConsultationRequest) -> str:
-    """상황 설명 + 추가 질문 답변을 합친 검색 질의. 외부 임베딩 API로 가므로 개인정보를 가린다."""
-    return mask_text(' '.join([request.description, *request.answers]).strip())
+    """사용자가 작성한 상황 설명으로 구성한 검색 질의. 외부 임베딩 API로 가므로 개인정보를 가린다."""
+    return mask_text(request.description.strip())
 
 
 def situation_payload(request: ConsultationRequest) -> dict:
@@ -44,4 +44,4 @@ async def retrieve(request: ConsultationRequest, store: VectorStore, ai: GeminiS
                 embedding = await ai.embed_query(query)
             except AiUnavailable:
                 logger.warning('query embedding unavailable, falling back to tfidf')
-    return await run_in_threadpool(store.search, request.category, query, embedding)
+    return await run_in_threadpool(store.search, request.category, query, embedding, 1)

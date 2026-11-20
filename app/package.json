@@ -35,7 +35,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "node --experimental-strip-types --test tests/domain.test.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "export:android": "expo export --platform android --output-dir build/android",
     "export:ios": "expo export --platform ios --output-dir build/ios"
   },

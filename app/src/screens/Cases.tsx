@@ -1,5 +1,7 @@
+import { SimilarPrecedent } from "../components/SimilarPrecedent";
+import { localMatch } from "../services/localMatch";
 import React, { useState } from "react";
-import { Text, View, Pressable, Alert, Linking } from "react-native";
+import { Text, View, Pressable, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   Screen,
@@ -15,7 +17,6 @@ import {
 import { useApp } from "../state/AppProvider";
 import { CaseRecord, todoLabels, validDate } from "../domain/model";
 import { CaseCard } from "./Home";
-import { isOfficialSource } from "../services/consultation";
 export function Cases() {
   const { data } = useApp(),
     [filter, setFilter] = useState("전체");
@@ -173,24 +174,7 @@ export function CaseDetail() {
             <Text style={s.body}>
               {c.result?.summary || "저장한 결과가 없습니다."}
             </Text>
-            {c.result?.precedents.map((p) => (
-              <View key={p.id}>
-                <Text style={s.body}>
-                  {p.title} · {p.caseNumber}
-                </Text>
-                <Text style={s.small}>{p.summary}</Text>
-                <Button
-                  secondary
-                  label="원문 보기"
-                  onPress={() => {
-                    if (isOfficialSource(p.sourceUrl))
-                      void Linking.openURL(p.sourceUrl).catch(() =>
-                        Alert.alert("열기 실패"),
-                      );
-                  }}
-                />
-              </View>
-            ))}
+            {c.result && <SimilarPrecedent item={(c.result.mode === "demo" ? localMatch(c.category, c.description) : c.result.precedents)[0]} />}
             <Text style={s.h2}>메모</Text>
             <Text style={s.body}>{c.memo || "메모가 없습니다."}</Text>
           </Card>
