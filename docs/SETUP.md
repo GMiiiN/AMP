@@ -7,9 +7,74 @@
 ├─ server/    Python FastAPI 상담 API, 검색 및 선택적 RAG
 ├─ data/      국가법령정보 API 수집·전처리·SQLite 벡터DB 구축
 ├─ docs/      화면 명세·API 명세·아키텍처·검증 보고서
+├─ scripts/   개발 환경 준비(setup.ps1 / setup.sh)·점검(check_env.py)
 ├─ README.md
 └─ .gitignore
 ```
+
+## 0. 빠른 시작 (setup.ps1 / setup.sh)
+
+처음 받은 노트북은 저장소 루트에서 스크립트를 한 번 실행해 준비합니다. 준비물: Git, Node.js 22.13 이상, Python 3.11 이상(3.12 권장).
+
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup.ps1
+```
+
+macOS:
+
+```bash
+bash scripts/setup.sh
+```
+
+어느 폴더에서 실행해도 저장소 루트를 기준으로 다음을 합니다.
+
+1. `server/.env`, `app/.env`가 **없을 때만** 각 `.env.example`에서 복사합니다. 이미 있으면 절대 덮어쓰지 않습니다.
+2. PC의 Wi-Fi/이더넷 IPv4를 찾아 `app/.env`의 `EXPO_PUBLIC_API_URL` **한 줄만** `http://<IPv4>:8000`으로 바꿉니다. 가상 어댑터(WSL·Hyper-V·VPN 등)와 169.254.x.x는 제외하고, 다른 줄은 그대로 둡니다.
+3. `server/.venv`를 만들고 `pip install -r requirements.txt`를 실행합니다. 이미 있으면 그 venv를 다시 씁니다.
+4. `app`에서 `npm ci`를 실행합니다.
+5. `scripts/check_env.py`로 점검합니다. 모드별 필요한 키, 판례 DB, `app/.env` 주소 형식, 설치 상태를 보며 **키 값은 출력하지 않고 있음/없음만** 보여 줍니다.
+
+| Windows (`setup.ps1`) | macOS (`setup.sh`) | 설명 |
+|---|---|---|
+| `-ApiUrl <주소>` | `--api-url <주소>` | 자동 탐지 대신 직접 지정. 예) 다른 팀원 PC `http://192.168.0.31:8000`, 터널 `https://xxxx.trycloudflare.com` |
+| `-KeepApiUrl` | `--keep-api-url` | `EXPO_PUBLIC_API_URL`을 바꾸지 않음(다시 실행할 때 지금 주소 유지) |
+| `-Port 8000` | `--port 8000` | 자동 탐지 주소에 붙일 서버 포트 |
+| `-Python <경로>` | `--python <경로>` | venv를 만들 Python 지정. 예) `-Python "py -3.12"` |
+| `-SkipServer` | `--skip-server` | venv 생성·pip 설치 건너뜀 |
+| `-SkipApp` | `--skip-app` | `npm ci` 건너뜀 |
+| `-SkipCheck` | `--skip-check` | 마지막 점검 건너뜀 |
+
+준비가 끝나면 터미널 두 개를 열어 저장소 루트에서 실행합니다(macOS는 `.\.venv\Scripts\python.exe` 대신 `.venv/bin/python`).
+
+```powershell
+# 터미널 1: 서버
+cd server
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# 터미널 2: 앱 (.env를 바꾼 뒤에는 꼭 --clear)
+cd app
+npx expo start --clear
+```
+
+- 서버를 켠 뒤 저장소 루트에서 `server\.venv\Scripts\python.exe scripts\check_env.py --health`(macOS `server/.venv/bin/python scripts/check_env.py --health`)를 실행하면 앱이 가리키는 주소의 `/health`까지 확인합니다.
+- 서버를 처음 켤 때 Windows 방화벽 창이 뜨면 **개인 네트워크**를 허용합니다.
+- 다시 실행해도 안전합니다(`.env`를 덮어쓰지 않고 venv를 재사용). 단 `npm ci`는 `node_modules`를 새로 설치하므로 필요 없으면 `-SkipApp`을 붙입니다.
+- PowerShell에서 "스크립트를 실행할 수 없습니다" 오류가 나면 위처럼 `-ExecutionPolicy Bypass -File`로 실행합니다.
+
+### 비밀 값·판례 DB는 git 밖(비공개 Drive)에서 받기
+
+키(`GEMINI_API_KEY`, `LAW_API_OC`)와 판례 DB(`precedents.sqlite3`)는 `.gitignore` 대상이라 저장소에 없습니다. **팀 비공개 Drive**에서 받아 아래 위치에 둡니다.
+
+| 받을 것 | 둘 위치 | 필요한 경우 |
+|---|---|---|
+| 키 값 | `server/.env`의 `GEMINI_API_KEY=`, `LAW_API_OC=` 뒤 | rag 모드 서버(키 보유 노트북 1대), 판례 수집(4장) |
+| 판례 DB `precedents.sqlite3` | `data/vector_db/precedents.sqlite3` | rag 모드 서버 |
+
+- setup 스크립트가 만든 `server/.env`에 값만 붙여 넣습니다. Drive의 `.env` 파일로 통째로 바꿨다면 `CONSULTATION_MODE` 값을 확인합니다.
+- 키는 메신저·이슈·커밋·스크린숏에 붙이지 않고, `app/.env`의 `EXPO_PUBLIC_*`(앱 번들에 그대로 들어감)에도 넣지 않습니다. Drive 링크는 팀원끼리만 공유합니다.
+- 넣은 뒤 저장소 루트에서 `python scripts/check_env.py`(macOS는 `python3`)로 확인합니다. demo 모드는 키와 DB 없이 동작합니다.
 
 ## 1. 모바일 앱 실행 — 서버 없이 먼저 체험
 
@@ -33,6 +98,8 @@ npm start
 
 기본은 **로컬 데모 모드**입니다. AI 키나 서버 없이 11개 화면, 입력 검증, 질문, 사건 저장/수정/삭제를 체험할 수 있습니다. 처음 실행할 때 테스트 계정 없이 바로 홈으로 진입합니다.
 
+setup 스크립트(0장)를 실행했다면 `app/.env`에 `EXPO_PUBLIC_USE_API=true`가 들어가 앱이 서버를 호출합니다. 서버(2장)를 먼저 켜거나, 서버 없이 보려면 `false`로 바꾸고 `npx expo start --clear`로 다시 시작하세요.
+
 ## 2. Python FastAPI 서버 실행
 
 Python 3.12 권장. 별도의 터미널을 저장소 루트에서 열고:
@@ -46,7 +113,7 @@ Windows PowerShell:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-Copy-Item .env.example .env
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
@@ -54,9 +121,11 @@ macOS / Linux:
 
 ```bash
 .venv/bin/python -m pip install -r requirements.txt
-cp .env.example .env
+[ -e .env ] || cp .env.example .env
 .venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+`.env`가 이미 있으면 복사하지 않습니다(키가 들어 있는 파일을 덮어쓰지 않도록).
 
 API 문서: http://127.0.0.1:8000/docs / 상태: http://127.0.0.1:8000/health
 
@@ -64,18 +133,29 @@ API 문서: http://127.0.0.1:8000/docs / 상태: http://127.0.0.1:8000/health
 
 ## 3. 모바일 앱과 서버 연결
 
-`app/.env.example`을 `app/.env`로 복사하고:
+0장의 setup 스크립트가 이 과정을 자동으로 합니다(`app/.env` 생성, `EXPO_PUBLIC_API_URL`을 PC IPv4로 설정). 직접 하려면 저장소 루트에서 `app/.env.example`을 `app/.env`로 복사합니다(이미 있으면 복사하지 않음).
+
+```powershell
+if (-not (Test-Path app\.env)) { Copy-Item app\.env.example app\.env }   # Windows
+```
+
+```bash
+[ -e app/.env ] || cp app/.env.example app/.env   # macOS / Linux
+```
+
+`app/.env.example`에 들어 있는 값(주석 제외):
 
 ```dotenv
 EXPO_PUBLIC_USE_API=true
 EXPO_PUBLIC_API_URL=http://192.168.0.10:8000
 ```
 
-`192.168.0.10`은 **PC의 실제 Wi-Fi IPv4 주소**로 바꿉니다. Windows에서 `ipconfig`로 확인합니다. 휴대폰의 `localhost`는 PC가 아닙니다.
-
+- `EXPO_PUBLIC_USE_API=true`일 때만 서버를 호출합니다. `false`이거나 `app/.env`가 없으면 서버 없이 로컬 데모로 동작합니다(1장).
+- `192.168.0.10`은 예시입니다. **PC의 실제 Wi-Fi/이더넷 IPv4**로 바꿉니다(setup 스크립트가 자동으로 바꿉니다). Windows는 `ipconfig`, macOS는 `ipconfig getifaddr en0`으로 확인합니다. 휴대폰의 `localhost`는 PC가 아닙니다. 주소 끝에 `/`를 붙이지 않습니다.
 - Android 에뮬레이터: `http://10.0.2.2:8000`
 - macOS의 iOS 시뮬레이터: `http://127.0.0.1:8000`
-- 휴대폰 브라우저에서 `http://PC_IP:8000/health`가 열리는지 확인하세요. 필요하면 Windows 방화벽에서 해당 Python 프로그램의 개인 네트워크 접근을 허용하세요.
+- 같은 Wi-Fi에서 안 붙으면 터널 HTTPS 주소를 넣을 수 있습니다(8장).
+- 휴대폰 브라우저에서 `http://PC_IP:8000/health`가 열리는지 확인하세요. PC에서는 저장소 루트에서 `python scripts/check_env.py --health`(macOS는 `python3`)로 확인합니다. 필요하면 Windows 방화벽에서 해당 Python 프로그램의 개인 네트워크 접근을 허용하세요.
 - 환경변수 변경 후 Expo를 중지하고 `npx expo start --clear`로 다시 실행합니다.
 - `server/.env`의 `CONSULTATION_MODE=demo` 상태에서도 실제 HTTP 요청/응답을 테스트할 수 있습니다.
 - 설치용 앱에서 외부 서버에 접속할 때는 HTTPS API를 사용하세요. 개발용 HTTP가 OS 네트워크 정책에 의해 제한될 수 있습니다.
@@ -151,6 +231,46 @@ npm run export:ios
 ```
 
 검증 범위 및 실제 기기에서 확인할 항목은 `docs/TEST_REPORT.md`에 정리했습니다.
+
+## 8. 팀원 노트북 최종 확인 (2단계)
+
+모든 노트북에서 0장 setup 스크립트를 먼저 실행합니다. 키와 판례 DB는 **1대에만** 둡니다.
+
+**1단계: 전원 demo 모드**
+
+1. `server/.env`는 `CONSULTATION_MODE=demo` 그대로 둡니다. 키·DB가 필요 없습니다.
+2. 각자 서버를 켜고(0장) `server\.venv\Scripts\python.exe scripts\check_env.py --health`가 `mode=demo`로 통과하는지 봅니다.
+3. `npx expo start --clear` → 휴대폰 Expo Go로 QR 스캔 → 상담 흐름(분야 → 상황 입력 → 추가 질문 → 결과)을 끝까지 진행합니다. 결과 화면이 뜨면 앱과 서버가 연결된 것입니다.
+
+**2단계: 키 보유 노트북 1대만 rag, 나머지는 그 서버로 연결**
+
+1. 서버 PC(키 보유 노트북): 비공개 Drive에서 받은 키를 `server/.env`에, DB를 `data/vector_db/`에 둡니다(0장). `CONSULTATION_MODE=rag`로 바꾸고 서버를 다시 시작합니다.
+2. 서버 PC에서 `check_env.py --health`로 `mode=rag`, 판례 DB 있음, `GEMINI_API_KEY` 있음을 확인하고, setup 출력의 "탐지한 IPv4"(또는 `ipconfig`)를 팀원에게 알립니다.
+3. 나머지 노트북: 자기 서버는 끄고, 앱 주소만 서버 PC로 바꿉니다.
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\setup.ps1 -SkipServer -SkipApp -ApiUrl http://<서버 PC IPv4>:8000
+   ```
+
+   macOS: `bash scripts/setup.sh --skip-server --skip-app --api-url http://<서버 PC IPv4>:8000`
+4. `check_env.py --health`가 `mode=rag`로 통과하고 휴대폰 브라우저에서도 `http://<서버 PC IPv4>:8000/health`가 열리면, `npx expo start --clear`로 앱을 다시 시작해 상담 흐름을 진행합니다. demo 때와 달리 AI 요약이나 근거 판례가 보이면 rag 서버에 연결된 것입니다(기준 점수를 넘는 판례가 없으면 "판례 근거 없음"이 나올 수 있습니다). 이때 "응답 모드가 이 PC의 server/.env 모드와 다릅니다"라는 참고 메시지는 정상입니다.
+5. 끝나면 `-ApiUrl` 없이 setup을 다시 실행해 자기 PC 주소로 돌아갑니다. 서버 PC 주소를 계속 쓰려면 다시 실행할 때 `-KeepApiUrl`을 붙입니다.
+
+### 같은 Wi-Fi에서 안 붙을 때 (터널)
+
+학교·공용 Wi-Fi는 기기끼리의 통신을 막는 경우가 많습니다(휴대폰 브라우저에서 `http://<PC IPv4>:8000/health`가 안 열림). 이때는 터널을 씁니다. 두 터널은 맡는 일이 다릅니다.
+
+| 막힌 것 | 명령 | 하는 일 |
+|---|---|---|
+| 앱이 API 서버(8000)에 못 붙음 | `cloudflared tunnel --url http://localhost:8000` | 서버 PC의 API를 `https://<임의 이름>.trycloudflare.com`으로 공개 |
+| Expo Go가 QR을 열지 못함(앱 번들을 못 받음) | `npx expo start --tunnel` | Expo 개발 서버(Metro)를 터널로 연결 |
+
+1. 서버 PC에서 서버를 켠 채로 `cloudflared tunnel --url http://localhost:8000`을 실행하고 출력된 `https://...trycloudflare.com` 주소를 확인합니다. 설치: Windows `winget install --id Cloudflare.cloudflared`, macOS `brew install cloudflared`.
+2. 앱을 실행할 PC에서 그 주소를 넣습니다: `setup.ps1 -SkipServer -SkipApp -ApiUrl https://<임의 이름>.trycloudflare.com` (macOS `--api-url`).
+3. `check_env.py --health`로 터널 주소의 `/health`를 확인한 뒤 `npx expo start --tunnel --clear`로 앱을 실행합니다. SDK 58의 `--tunnel`은 기본으로 Expo 터널을 쓰며, 처음 실행할 때 안내(설치·로그인 등)가 나오면 따릅니다.
+
+- 터널 주소는 실행할 때마다 바뀌고, 주소를 아는 누구나 접속할 수 있습니다. 개발용 API에는 인증이 없으니 확인이 끝나면 `Ctrl+C`로 끕니다. rag 서버를 열어 두면 외부 요청으로도 Gemini 사용량이 소모될 수 있습니다.
+- 휴대폰 핫스팟에 PC와 휴대폰을 함께 연결하는 방법도 있습니다. 네트워크가 바뀌면 setup을 다시 실행해 IP를 갱신합니다.
 
 ## 구현 범위
 

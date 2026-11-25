@@ -21,7 +21,14 @@ data/
 - 임베딩 대상: 판시사항 + 판결요지
 - 메타데이터로 저장: 사건명, 사건번호, 법원명, 선고일자, 사건종류, 참조조문, 판례일련번호
 - 판례 전문은 DB에 넣지 않고 원문 링크로만 처리
-- `raw/`, `processed/`, `vector_db/`는 용량 때문에 깃에서 제외하므로, 공유 방법(드라이브 등)은 팀에서 정해 여기에 적습니다.
+- `raw/`, `processed/`, `vector_db/`는 용량 때문에 깃에서 제외합니다. 공유는 아래 "공유 방법"(팀 비공개 Drive)을 따릅니다.
+
+## 공유 방법
+
+- 판례 DB `precedents.sqlite3`는 **팀 비공개 Drive**에서 받아 `data/vector_db/precedents.sqlite3`에 둡니다. 다른 위치에 두면 `server/.env`의 `VECTOR_DB_PATH`를 그 경로로 바꿉니다.
+- `server/.env`의 키 값(`GEMINI_API_KEY`, `LAW_API_OC`)도 같은 비공개 Drive에서 받습니다. 깃·메신저·이슈에는 올리지 않고, Drive 링크는 팀원끼리만 공유합니다.
+- 받은 뒤 저장소 루트에서 `python scripts/check_env.py`(macOS는 `python3`)를 실행하면 DB 존재, 판례 건수, 임베딩 포함 여부를 확인합니다(키 값은 출력하지 않음). rag 모드에는 DB가 필요하고 demo 모드에는 필요 없습니다.
+- DB를 새로 만들었으면(`build_index.py`) 같은 Drive 위치에 올리고 `--embed` 사용 여부와 만든 날짜를 팀에 알립니다. `raw/`, `processed/`는 DB를 다시 만들 사람만 필요하며, 필요하면 같은 Drive 폴더에 둡니다.
 
 ## 현재 구현
 
