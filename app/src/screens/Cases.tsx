@@ -13,6 +13,7 @@ import {
   C,
 } from "../components/ui";
 import { SimilarPrecedent } from "../components/SimilarPrecedent";
+import { WebSources } from "../components/WebSources";
 import { useApp } from "../state/AppProvider";
 import { CaseRecord, todoLabels, validDate } from "../domain/model";
 import { CaseCard } from "./Home";
@@ -174,6 +175,7 @@ export function CaseDetail() {
               {c.result?.summary || "저장한 결과가 없습니다."}
             </Text>
             {c.result && <SimilarPrecedent items={c.result.precedents} />}
+            <WebSources items={c.result?.sources} />
             <Text style={s.h2}>메모</Text>
             <Text style={s.body}>{c.memo || "메모가 없습니다."}</Text>
           </Card>

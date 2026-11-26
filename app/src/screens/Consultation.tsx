@@ -22,6 +22,7 @@ import {
   C,
 } from "../components/ui";
 import { SimilarPrecedent } from "../components/SimilarPrecedent";
+import { WebSources } from "../components/WebSources";
 import { useApp } from "../state/AppProvider";
 import {
   categories,
@@ -498,6 +499,7 @@ export function Result() {
           <Card>
             <Text style={s.badge}>02 · 관련 판례</Text>
             <SimilarPrecedent items={result.precedents} />
+            <WebSources items={result.sources} />
             {result.searchMethod === "tfidf" && result.precedents.length ? (
               <Text style={s.small}>
                 의미 검색을 쓸 수 없어 키워드 검색으로 찾은 판례입니다.

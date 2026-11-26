@@ -1,7 +1,7 @@
 """테스트 공용 도구. 외부 API(Gemini)는 호출하지 않는다."""
 import numpy as np
 
-from app.schemas import GeneralAnswer, GeneratedAnswer
+from app.schemas import GeneralAnswer, GeneratedAnswer, SearchAnswer, WebSource
 from app.services.gemini import AiUnavailable
 
 REQUEST = {'category': '임금체불', 'date': '2026-01-01', 'amount': '20000', 'description': '임금 급여 지급이 지연되었습니다', 'answers': ['네']}
@@ -31,8 +31,9 @@ class FakeAI:
     embedding_model = 'gemini-embedding-001'
     dimensions = 4
 
-    def __init__(self, fail_generate=False, fail_embed=False, cite=None):
+    def __init__(self, fail_generate=False, fail_embed=False, cite=None, fail_search=False):
         self.fail_generate = fail_generate
+        self.fail_search = fail_search
         self.fail_embed = fail_embed
         self.cite = cite
         self.calls = []
@@ -48,6 +49,12 @@ class FakeAI:
         if self.fail_generate:
             raise AiUnavailable()
         return GeneratedAnswer(summary='AI 요약', citedIds=self.cite or [precedents[0]['id']])
+
+    async def generate_search_answer(self, situation):
+        self.calls.append(('search', situation))
+        if self.fail_search:
+            raise AiUnavailable()
+        return SearchAnswer(summary='웹 검색 안내', sources=[WebSource(title='example.go.kr', url='https://example.go.kr/guide')])
 
     async def generate_general_answer(self, situation):
         self.calls.append(('general', situation))

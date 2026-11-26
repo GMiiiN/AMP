@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatJudgmentDate } from "../src/domain/model.ts";
-import { confirmOpenSource } from "../src/services/officialSource.ts";
+import { confirmOpenSource, confirmOpenWebSource } from "../src/services/officialSource.ts";
 
 const precedent = (id) => ({
   id, title: `${id}에 관한 판례`, caseNumber: "2020고단1", court: "대법원", judgmentDate: "20201113",
@@ -38,6 +38,19 @@ test("공식 출처가 아닌 주소는 열지 않고 이유를 알린다", () =
   assert.equal(alerts[0][2], undefined);
   assert.match(alerts[0][1], /공식 출처/);
   assert.deepEqual(opened, []);
+});
+
+test("웹 검색 출처는 https 주소만 확인 창을 거쳐 연다", () => {
+  const alerts = [];
+  const opened = [];
+  confirmOpenWebSource("https://example.go.kr/guide", (...args) => alerts.push(args), async (u) => opened.push(u));
+  assert.equal(alerts[0][0], "외부 페이지 열기");
+  assert.deepEqual(opened, []);
+  alerts[0][2].find((b) => b.text === "열기").onPress();
+  assert.deepEqual(opened, ["https://example.go.kr/guide"]);
+  confirmOpenWebSource("http://example.com", (...args) => alerts.push(args), async (u) => opened.push(u));
+  assert.equal(alerts[1][2], undefined);
+  assert.equal(opened.length, 1);
 });
 
 test("판결일은 선고일자(yyyymmdd)를 점 형식으로 보여 준다", () => {

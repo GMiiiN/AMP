@@ -1,4 +1,4 @@
-import { isOfficialSource } from "./officialSource";
+import { isOfficialSource, isWebUrl } from "./officialSource";
 import {
   Draft,
   questions,
@@ -120,6 +120,15 @@ const apiConsultation: ConsultationService = {
       )
         throw Error("판례 출처 형식을 확인하지 못했습니다.");
     }
+    if (
+      r.sources !== undefined &&
+      (!Array.isArray(r.sources) ||
+        r.sources.some(
+          (x: { title?: unknown; url?: unknown } | null) =>
+            typeof x?.title !== "string" || !isWebUrl(x?.url),
+        ))
+    )
+      throw Error("웹 검색 출처 형식을 확인하지 못했습니다.");
     return r;
   },
 };

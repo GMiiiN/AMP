@@ -157,14 +157,35 @@ class RetrievalTests(ApiTestCase):
         self.assertTrue(data['notice'].startswith('판례 근거 없음'))
         self.assertNotIn('answer', [c[0] for c in ai.calls])
 
-    def test_other_category_general_answer_without_search(self):
+    def test_other_category_web_search_answer_with_sources(self):
         ai = self.use_ai(FakeAI())
+        request = {**REQUEST, 'category': '기타', 'description': '연락처 010-1234-5678 로 계속 독촉 문자가 옵니다'}
+        with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            data = self.client.post('/api/consultations/result', json=request).json()
+        self.assertEqual(data['summary'], '웹 검색 안내')
+        self.assertEqual(data['sources'], [{'title': 'example.go.kr', 'url': 'https://example.go.kr/guide'}])
+        self.assertEqual(data['precedents'], [])
+        self.assertTrue(data['notice'].startswith('판례 근거 없음'))
+        self.assertEqual([c[0] for c in ai.calls], ['search'])
+        # 웹 검색 모델에도 개인정보를 가린 상황만 보낸다.
+        self.assertNotIn('010-1234-5678', json.dumps(ai.calls[0][1], ensure_ascii=False))
+
+    def test_other_category_both_answers_fail_returns_retry_error(self):
+        self.use_ai(FakeAI(fail_search=True, fail_generate=True))
+        with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            response = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()['error']['code'], 'AI_UNAVAILABLE')
+
+    def test_other_category_falls_back_to_general_answer_when_search_fails(self):
+        ai = self.use_ai(FakeAI(fail_search=True))
         with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
             data = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'}).json()
         self.assertEqual(data['summary'], '일반 안내')
         self.assertEqual(data['precedents'], [])
+        self.assertEqual(data['sources'], [])
         self.assertTrue(data['notice'].startswith('판례 근거 없음'))
-        self.assertEqual([c[0] for c in ai.calls], ['general'])
+        self.assertEqual([c[0] for c in ai.calls], ['search', 'general'])
 
 
 class QuestionTests(ApiTestCase):

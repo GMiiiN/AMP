@@ -75,12 +75,21 @@ async def make_result(request: ConsultationRequest, mode: str, ai: GeminiService
 
 
 async def _other_category(request: ConsultationRequest, mode: str, ai: GeminiService | None) -> ConsultationResult:
-    """기타 분야: 판례 검색 없이 일반 법률 정보로 답하고 '판례 근거 없음'을 표시한다(SFR-004, SFR-012, INR-004)."""
+    """기타 분야: 판례 검색 없이 Google 검색(grounding)을 참고해 답하고 출처를 함께 준다. 웹 검색이 실패하면
+    (한도 초과·모델 접근 거부 포함) 일반 법률 정보 답변으로 대체한다. 어느 쪽이든 '판례 근거 없음'을 표시한다(SFR-004, SFR-012, INR-004)."""
     if mode == 'demo' or ai is None:
         return ConsultationResult(mode='demo' if mode == 'demo' else 'retrieval', summary=request.description,
                                   notice='판례 근거 없음: 기타 분야는 판례 검색에서 제외되며 현재는 입력 내용을 정리합니다.')
+    situation = rag.situation_payload(request)  # 개인정보를 가린 상황 정보
     try:
-        answer = await ai.generate_general_answer(rag.situation_payload(request))
+        found = await ai.generate_search_answer(situation)
+        return ConsultationResult(mode='rag', summary=found.summary, sources=found.sources,
+                                  notice=f'판례 근거 없음: 기타 분야는 판례 검색 없이 Google 검색 결과를 참고해 안내합니다. '
+                                         f'출처 링크의 내용을 직접 확인해 주세요. {NOTICE} {AI_NOTICE}')
+    except AiUnavailable:
+        logger.warning('web search answer unavailable, using general answer')
+    try:
+        answer = await ai.generate_general_answer(situation)
     except AiUnavailable:
         raise ai_unavailable() from None
     return ConsultationResult(mode='rag', summary=answer.summary,

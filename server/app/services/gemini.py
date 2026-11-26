@@ -1,6 +1,8 @@
 """Gemini API 연계 (INR-004). 서버에서만 호출하며 API 키는 환경변수로만 받는다(SER-006).
 
 - 생성: 추가 질문 2개, 판례 근거 답변, 기타 분야 일반 답변. JSON 구조화 출력 후 Pydantic으로 다시 검증한다.
+- 기타 분야 웹 검색: 별도 모델(GEMINI_SEARCH_MODEL)로 Google Search grounding 답변과 출처 링크를 받는다.
+  한도 초과(429)·접근 거부(403/404) 등은 재시도해도 소용없으므로 1회만 시도하고, 실패하면 호출한 쪽이 일반 답변으로 대체한다.
 - 임베딩: gemini-embedding-001, 768차원. 768차원 출력은 정규화되어 있지 않으므로 서버에서 정규화한다.
 - 실패(한도 초과 429, 서버 오류, 형식 오류, 모르는 인용 ID)는 1회 재시도하고, 그래도 실패하면 AiUnavailable.
 - 사용자 입력은 호출 전에 privacy.mask_text 로 가린 상태여야 한다(호출하는 쪽 책임).
@@ -17,7 +19,7 @@ from google import genai
 from google.genai import errors, types
 from pydantic import ValidationError
 
-from ..schemas import GeneralAnswer, GeneratedAnswer, GeneratedQuestions
+from ..schemas import GeneralAnswer, GeneratedAnswer, GeneratedQuestions, SearchAnswer, WebSource
 
 logger = logging.getLogger('lifelaw')
 T = TypeVar('T')
@@ -46,6 +48,13 @@ GENERAL_PROMPT = _COMMON_RULES + (
     'summary 에는 상황 요약, 일반적으로 확인해 볼 점, 도움을 받을 수 있는 기관 종류를 6문장 이내로 쓴다.'
 )
 
+SEARCH_PROMPT = _COMMON_RULES + (
+    '이 상담은 판례 데이터가 없는 기타 분야다. Google 검색으로 찾은 공신력 있는 자료(정부·공공기관 안내 등)를 참고해 답한다. '
+    '판례를 언급하거나 인용하지 않는다. 검색 결과와 사용자의 상황이 다를 수 있음을 밝힌다. '
+    '상황 요약, 일반적으로 확인해 볼 점, 도움을 받을 수 있는 기관 종류를 6문장 이내의 평문으로 쓴다.'
+)
+MAX_SOURCES = 5
+
 QUESTIONS_PROMPT = _COMMON_RULES + (
     '사용자의 상황을 읽고, 상담에 필요한데 아직 드러나지 않은 사실을 확인하는 질문 2개를 만든다. '
     '각 질문은 "네/아니요"로 답할 수 있는 한 문장이고, 60자 이내이며, 물음표로 끝난다. '
@@ -69,6 +78,19 @@ class AiUnavailable(Exception):
     """재시도 후에도 AI 응답을 받지 못함."""
 
 
+def web_sources(response) -> list[WebSource]:
+    """grounding 메타데이터(groundingChunks[].web)에서 https 출처를 중복 없이 최대 MAX_SOURCES건 뽑는다."""
+    candidates = getattr(response, 'candidates', None) or []
+    metadata = getattr(candidates[0], 'grounding_metadata', None) if candidates else None
+    sources: dict[str, WebSource] = {}
+    for chunk in getattr(metadata, 'grounding_chunks', None) or []:
+        web = getattr(chunk, 'web', None)
+        uri = getattr(web, 'uri', None) or ''
+        if uri.startswith('https://') and uri not in sources:
+            sources[uri] = WebSource(title=getattr(web, 'title', None) or getattr(web, 'domain', None) or uri, url=uri)
+    return list(sources.values())[:MAX_SOURCES]
+
+
 def normalize(vector) -> np.ndarray:
     array = np.asarray(vector, dtype=np.float32)
     norm = float(np.linalg.norm(array))
@@ -77,8 +99,10 @@ def normalize(vector) -> np.ndarray:
 
 class GeminiService:
     def __init__(self, api_key: str, model: str, embedding_model: str = 'gemini-embedding-001', dimensions: int = 768,
-                 timeout_ms: int = 45000, retry_delay: float = 1.0, client: genai.Client | None = None):
+                 timeout_ms: int = 45000, retry_delay: float = 1.0, client: genai.Client | None = None,
+                 search_model: str = 'gemini-2.5-flash-lite'):
         self.model = model
+        self.search_model = search_model
         self.embedding_model = embedding_model
         self.dimensions = dimensions
         self.retry_delay = retry_delay
@@ -123,6 +147,21 @@ class GeminiService:
 
     async def generate_general_answer(self, situation: dict) -> GeneralAnswer:
         return await self._generate(GENERAL_PROMPT, {'situation': situation}, GENERAL_SCHEMA, GeneralAnswer.model_validate_json)
+
+    async def generate_search_answer(self, situation: dict) -> SearchAnswer:
+        """기타 분야: Google Search grounding 으로 답하고 출처를 함께 돌려준다. 출처가 없으면 실패로 본다."""
+        config = types.GenerateContentConfig(system_instruction=SEARCH_PROMPT, temperature=0,
+                                             tools=[types.Tool(google_search=types.GoogleSearch())])
+        contents = json.dumps({'situation': situation}, ensure_ascii=False)
+        try:
+            response = await self.client.aio.models.generate_content(model=self.search_model, contents=contents, config=config)
+            sources = web_sources(response)
+            if not response.text or not sources:
+                raise ValueError('no grounded answer')
+            return SearchAnswer(summary=response.text.strip(), sources=sources)
+        except _FAILURES as exc:
+            logger.warning('gemini search failed type=%s code=%s', type(exc).__name__, getattr(exc, 'code', ''))
+        raise AiUnavailable()
 
     # ---------- 임베딩 ----------
 

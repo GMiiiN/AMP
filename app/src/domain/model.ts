@@ -83,6 +83,8 @@ export function formatJudgmentDate(value: string) {
   const m = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
   return m ? `${m[1]}.${m[2]}.${m[3]}` : value;
 }
+/** 기타 분야 웹 검색(Google Search grounding)이 참고한 웹 문서 */
+export type WebSource = { title: string; url: string };
 export type ConsultationResult = {
   mode: "demo" | "retrieval" | "rag";
   summary: string;
@@ -90,6 +92,8 @@ export type ConsultationResult = {
   notice: string;
   /** 판례 검색 방식. 임베딩을 못 쓰면 서버가 키워드(TF-IDF) 검색으로 대신한다. */
   searchMethod?: "embedding" | "tfidf";
+  /** 기타 분야를 웹 검색으로 답했을 때의 출처 */
+  sources?: WebSource[];
 };
 export type QuestionMode = "generated" | "template";
 export type Draft = {
