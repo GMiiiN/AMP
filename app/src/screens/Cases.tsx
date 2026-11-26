@@ -1,5 +1,4 @@
 import { SimilarPrecedent } from "../components/SimilarPrecedent";
-import { localMatch } from "../services/localMatch";
 import React, { useState } from "react";
 import { Text, View, Pressable, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -174,7 +173,7 @@ export function CaseDetail() {
             <Text style={s.body}>
               {c.result?.summary || "저장한 결과가 없습니다."}
             </Text>
-            {c.result && <SimilarPrecedent item={(c.result.mode === "demo" ? localMatch(c.category, c.description) : c.result.precedents)[0]} />}
+            {c.result && <SimilarPrecedent items={c.result.precedents} />}
             <Text style={s.h2}>메모</Text>
             <Text style={s.body}>{c.memo || "메모가 없습니다."}</Text>
           </Card>

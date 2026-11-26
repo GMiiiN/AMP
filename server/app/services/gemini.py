@@ -38,7 +38,7 @@ _COMMON_RULES = (
 ANSWER_PROMPT = _COMMON_RULES + (
     'precedents 에 주어진 판례만 근거로 사용한다. 사용자의 상황과 판례의 사실관계가 다를 수 있음을 구분해서 설명한다. '
     'summary 에는 상황 요약, 관련 판례가 말하는 핵심, 확인이 더 필요한 점을 6문장 이내로 쓴다. '
-    'citedIds 에는 summary 에서 실제로 근거로 삼은 판례의 id 만 1개 넣는다. 주어지지 않은 id 를 넣지 않는다.'
+    'citedIds 에는 summary 에서 실제로 근거로 삼은 판례의 id 만 1~3개 넣는다. 주어지지 않은 id 를 넣지 않는다.'
 )
 
 GENERAL_PROMPT = _COMMON_RULES + (

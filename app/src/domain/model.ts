@@ -76,6 +76,11 @@ export type Precedent = {
   summary: string;
   sourceUrl: string;
 };
+/** 판결일은 법령정보 API의 선고일자(yyyymmdd)로 저장한다. 화면에는 2020.11.13 형식으로 보여 준다. */
+export function formatJudgmentDate(value: string) {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
+  return m ? `${m[1]}.${m[2]}.${m[3]}` : value;
+}
 export type ConsultationResult = {
   mode: "demo" | "retrieval" | "rag";
   summary: string;

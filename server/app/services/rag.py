@@ -44,4 +44,4 @@ async def retrieve(request: ConsultationRequest, store: VectorStore, ai: GeminiS
                 embedding = await ai.embed_query(query)
             except AiUnavailable:
                 logger.warning('query embedding unavailable, falling back to tfidf')
-    return await run_in_threadpool(store.search, request.category, query, embedding, 1)
+    return await run_in_threadpool(store.search, request.category, query, embedding, 3)

@@ -1,4 +1,4 @@
-import { localMatch } from "./localMatch";
+import { isOfficialSource } from "./officialSource";
 import {
   Draft,
   questions,
@@ -20,25 +20,14 @@ export const demoConsultation: ConsultationService = {
     return {
       mode: "demo",
       summary: draft.description,
-      precedents: localMatch(draft.category, draft.description),
+      precedents: [],
       notice:
         draft.category === "기타"
           ? "기타 분야는 판례 검색 대상에서 제외됩니다."
-          : "수록된 판례 90건 중 입력한 상황과 표현이 유사한 1건을 찾습니다. 법적 적용 여부를 판단한 결과는 아닙니다.",
+          : "판례 검색은 서버에서 합니다. 서버 없이 앱만 실행한 데모에서는 판례가 나오지 않습니다.",
     };
   },
 };
-export function isOfficialSource(value: string) {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      ["www.law.go.kr", "law.go.kr"].includes(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
 /** 화면에 그대로 보여 줄 수 있는 문구를 담은 오류. */
 export class ConsultationError extends Error {}
 export function requestBody(draft: Draft) {
@@ -130,7 +119,7 @@ const apiConsultation: ConsultationService = {
       )
         throw Error("판례 출처 형식을 확인하지 못했습니다.");
     }
-    return { ...r, precedents: r.precedents.slice(0, 1) };
+    return r;
   },
 };
 export const consultationService = usesApi ? apiConsultation : demoConsultation;
