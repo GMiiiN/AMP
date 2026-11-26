@@ -50,6 +50,8 @@ def gemini_settings() -> dict:
         'retry_delay': env_float('GEMINI_RETRY_DELAY_SECONDS', 1.0),
         # 기타 분야 웹 검색 전용. 무료 등급에서 Google Search grounding을 쓸 수 있는 모델(하루 500건).
         'search_model': env('GEMINI_SEARCH_MODEL', 'gemini-2.5-flash-lite'),
+        # 웹 검색이 늦으면 일반 답변으로 넘어가야 앱 제한(60초) 안에 응답할 수 있어 짧게 둔다.
+        'search_timeout_ms': env_int('GEMINI_SEARCH_TIMEOUT_MS', 15000),
     }
 
 

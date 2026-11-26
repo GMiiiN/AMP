@@ -6,9 +6,9 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import numpy as np
-from google.genai import errors
+from google.genai import errors, types
 
-from app.services.gemini import AiUnavailable, GeminiService
+from app.services.gemini import AiUnavailable, GeminiService, normalize_web_url
 from helpers import record
 
 
@@ -32,8 +32,11 @@ def client_error(code, status):
 
 
 def grounded_response(text, uris):
-    chunks = [SimpleNamespace(web=SimpleNamespace(uri=uri, title=f'title-{i}', domain=None)) for i, uri in enumerate(uris)]
-    return SimpleNamespace(text=text, candidates=[SimpleNamespace(grounding_metadata=SimpleNamespace(grounding_chunks=chunks))])
+    """실제 SDK 응답 타입(google.genai.types)으로 grounding 응답을 만든다."""
+    chunks = [types.GroundingChunk(web=types.GroundingChunkWeb(uri=uri, title=f'title-{i}')) for i, uri in enumerate(uris)]
+    return types.GenerateContentResponse(candidates=[types.Candidate(
+        content=types.Content(role='model', parts=[types.Part(text=text)]),
+        grounding_metadata=types.GroundingMetadata(grounding_chunks=chunks))])
 
 
 class GeminiServiceTests(unittest.TestCase):
@@ -77,11 +80,13 @@ class SearchAnswerTests(unittest.TestCase):
     """기타 분야 웹 검색: 성공하면 출처를 담고, 실패·한도 초과·접근 거부는 재시도 없이 AiUnavailable(일반 답변으로 대체)."""
 
     def test_success_uses_search_model_with_google_search_and_returns_sources(self):
-        uris = ['https://a.example/1', 'https://a.example/1', 'http://plain.example', 'https://b.example/2']
+        uris = ['https://a.example/1', 'https://a.example/1', 'http://plain.example', 'HTTPS://B.Example/2',
+                'https://law.go.kr@evil.example/x', 'https://']
         ai, client = service(generate=[grounded_response(' 안내 ', uris)])
         answer = asyncio.run(ai.generate_search_answer({'description': '상황'}))
         self.assertEqual(answer.summary, '안내')
         self.assertEqual([s.url for s in answer.sources], ['https://a.example/1', 'https://b.example/2'])
+        self.assertEqual(answer.sources[0].title, 'title-0')
         kwargs = client.aio.models.generate_content.await_args.kwargs
         self.assertEqual(kwargs['model'], 'search-model')
         self.assertIsNotNone(kwargs['config'].tools[0].google_search)
@@ -90,6 +95,51 @@ class SearchAnswerTests(unittest.TestCase):
         ai, _ = service(generate=[grounded_response('안내', [])])
         with self.assertRaises(AiUnavailable):
             asyncio.run(ai.generate_search_answer({}))
+
+    def test_only_invalid_sources_is_failure(self):
+        bad_uri = types.GroundingChunk.model_construct(web=types.GroundingChunkWeb.model_construct(uri=123, title='x'))
+        response = grounded_response('안내', ['https://law.go.kr@evil.example/x', 'https://', 'http://plain.example'])
+        response.candidates[0].grounding_metadata.grounding_chunks.append(bad_uri)
+        ai, _ = service(generate=[response])
+        with self.assertRaises(AiUnavailable):
+            asyncio.run(ai.generate_search_answer({}))
+
+    def test_blank_summary_is_failure(self):
+        ai, _ = service(generate=[grounded_response('   ', ['https://a.example/1'])])
+        with self.assertRaises(AiUnavailable):
+            asyncio.run(ai.generate_search_answer({}))
+
+    def test_timeout_is_failure(self):
+        async def slow(**kwargs):
+            await asyncio.sleep(1)
+        ai, client = service()
+        client.aio.models.generate_content = AsyncMock(side_effect=slow)
+        ai.search_timeout = 0.01
+        with self.assertRaises(AiUnavailable):
+            asyncio.run(ai.generate_search_answer({}))
+
+    def test_access_denied_skips_search_for_the_process(self):
+        for code, status in ((403, 'PERMISSION_DENIED'), (404, 'NOT_FOUND')):
+            with self.subTest(code=code):
+                ai, client = service(generate=[client_error(code, status)])
+                for _ in range(2):
+                    with self.assertRaises(AiUnavailable):
+                        asyncio.run(ai.generate_search_answer({}))
+                self.assertEqual(client.aio.models.generate_content.await_count, 1)
+
+    def test_quota_error_does_not_block_next_search(self):
+        ai, client = service(generate=[quota_error(), grounded_response('안내', ['https://a.example/1'])])
+        with self.assertRaises(AiUnavailable):
+            asyncio.run(ai.generate_search_answer({}))
+        self.assertEqual(asyncio.run(ai.generate_search_answer({})).summary, '안내')
+
+    def test_normalize_web_url(self):
+        self.assertEqual(normalize_web_url('HTTPS://Example.COM/Path?q=1'), 'https://example.com/Path?q=1')
+        self.assertEqual(normalize_web_url('https://example.com:8443/a'), 'https://example.com:8443/a')
+        for bad in ('https://', 'http://example.com', 'https://user@example.com', 'https://law.go.kr@evil.example/x',
+                    'https://example.com:99999', 'javascript:alert(1)', None, 123):
+            with self.subTest(bad=bad):
+                self.assertIsNone(normalize_web_url(bad))
 
     def test_quota_and_access_errors_fail_without_retry(self):
         for error in (quota_error(), client_error(403, 'PERMISSION_DENIED'), client_error(404, 'NOT_FOUND'),

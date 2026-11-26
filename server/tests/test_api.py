@@ -1,10 +1,12 @@
+import asyncio
 import importlib.util
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 from fastapi.testclient import TestClient
@@ -12,6 +14,7 @@ from fastapi.testclient import TestClient
 from app.deps import get_ai_service
 from app.main import app
 from app.repositories.vector_store import SqliteVectorStore, build_store
+from app.services.gemini import GeminiService
 from helpers import REQUEST, FakeAI, FakeEmbedder, record
 
 
@@ -176,6 +179,33 @@ class RetrievalTests(ApiTestCase):
             response = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'})
         self.assertEqual(response.status_code, 502)
         self.assertEqual(response.json()['error']['code'], 'AI_UNAVAILABLE')
+
+    def test_other_category_general_answer_over_budget_returns_retry_error(self):
+        class SlowGeneral(FakeAI):
+            async def generate_general_answer(self, situation):
+                await asyncio.sleep(1)
+        self.use_ai(SlowGeneral(fail_search=True))
+        with patch('app.services.consultation.OTHER_CATEGORY_BUDGET_SECONDS', 0.01), \
+                patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            response = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'})
+        self.assertEqual(response.status_code, 502)
+
+    def test_other_category_search_timeout_falls_back_to_general_answer(self):
+        # 실제 GeminiService 에 가짜 클라이언트를 넣어, 검색 모델 호출만 시간 초과시키고 일반 답변은 성공시킨다.
+        async def generate(model, contents, config):
+            if model == 'search-model':
+                await asyncio.sleep(1)
+            return SimpleNamespace(text=json.dumps({'summary': '일반 안내'}, ensure_ascii=False))
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(side_effect=generate)
+        self.use_ai(GeminiService('unused', 'test-model', retry_delay=0, client=client,
+                                  search_model='search-model', search_timeout_ms=10))
+        with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            data = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'}).json()
+        self.assertEqual(data['summary'], '일반 안내')
+        self.assertEqual(data['sources'], [])
+        self.assertEqual([c.kwargs['model'] for c in client.aio.models.generate_content.await_args_list],
+                         ['search-model', 'test-model'])
 
     def test_other_category_falls_back_to_general_answer_when_search_fails(self):
         ai = self.use_ai(FakeAI(fail_search=True))

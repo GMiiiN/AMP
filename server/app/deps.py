@@ -10,8 +10,9 @@ from .services.gemini import GeminiService
 
 @lru_cache(maxsize=4)
 def _gemini(api_key: str, model: str, embedding_model: str, dimensions: int, timeout_ms: int, retry_delay: float,
-            search_model: str) -> GeminiService:
-    return GeminiService(api_key, model, embedding_model, dimensions, timeout_ms, retry_delay, search_model=search_model)
+            search_model: str, search_timeout_ms: int) -> GeminiService:
+    return GeminiService(api_key, model, embedding_model, dimensions, timeout_ms, retry_delay,
+                         search_model=search_model, search_timeout_ms=search_timeout_ms)
 
 
 def get_ai_service() -> GeminiService | None:

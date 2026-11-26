@@ -1,6 +1,8 @@
 """상담 흐름: 추가 질문 → 근거 판례 검색 → 답변 생성 (DFD 3.0~5.0)."""
+import asyncio
 import logging
 import sqlite3
+import time
 from typing import Callable
 
 from ..errors import ApiError, ai_unavailable
@@ -14,6 +16,8 @@ from .gemini import AiUnavailable, GeminiService
 logger = logging.getLogger('lifelaw')
 
 NOTICE = '법률정보 제공이며 자문이 아닙니다.'
+# 기타 분야는 웹 검색 → (실패 시) 일반 답변을 차례로 부르므로, 앱 요청 제한(60초) 안에 응답이 닿도록 전체 시간을 묶는다.
+OTHER_CATEGORY_BUDGET_SECONDS = 50
 AI_NOTICE = 'AI 요약은 원문 대조 및 전문가 검토가 필요합니다.'
 
 
@@ -81,6 +85,7 @@ async def _other_category(request: ConsultationRequest, mode: str, ai: GeminiSer
         return ConsultationResult(mode='demo' if mode == 'demo' else 'retrieval', summary=request.description,
                                   notice='판례 근거 없음: 기타 분야는 판례 검색에서 제외되며 현재는 입력 내용을 정리합니다.')
     situation = rag.situation_payload(request)  # 개인정보를 가린 상황 정보
+    started = time.monotonic()
     try:
         found = await ai.generate_search_answer(situation)
         return ConsultationResult(mode='rag', summary=found.summary, sources=found.sources,
@@ -88,9 +93,10 @@ async def _other_category(request: ConsultationRequest, mode: str, ai: GeminiSer
                                          f'출처 링크의 내용을 직접 확인해 주세요. {NOTICE} {AI_NOTICE}')
     except AiUnavailable:
         logger.warning('web search answer unavailable, using general answer')
+    remaining = OTHER_CATEGORY_BUDGET_SECONDS - (time.monotonic() - started)
     try:
-        answer = await ai.generate_general_answer(situation)
-    except AiUnavailable:
+        answer = await asyncio.wait_for(ai.generate_general_answer(situation), timeout=max(remaining, 1))
+    except (AiUnavailable, asyncio.TimeoutError):
         raise ai_unavailable() from None
     return ConsultationResult(mode='rag', summary=answer.summary,
                               notice=f'판례 근거 없음: 기타 분야는 판례 검색 없이 일반 법률 정보로 안내합니다. {NOTICE} {AI_NOTICE}')
