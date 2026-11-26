@@ -8,7 +8,7 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ActivityIndicator, View, Text, Pressable } from "react-native";
-import { AppData, initialData, Profile } from "../domain/model";
+import { AppData, dataForStorage, initialData, Profile } from "../domain/model";
 const KEY = "@lifelaw/mobile/v1";
 type Account = Profile & { password: string };
 type Store = {
@@ -39,13 +39,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           !Array.isArray(parsed.draft.evidence) || !Array.isArray(parsed.draft.checks)) {
         throw Error("invalid stored data");
       }
-      if (active) {setData(parsed);setLoadError("");setReady(true);}
+      // 예전에 웹 출처와 함께 저장된 기록을 정리한다(다음 저장 때 정리된 형태로 다시 쓴다).
+      if (active) {setData(dataForStorage(parsed));setLoadError("");setReady(true);}
     }).catch(() => {if (active) setLoadError("저장된 데이터를 읽지 못했습니다. 다시 시도해 주세요.");});
     return () => {active = false;};
   }, [loadAttempt]);
   useEffect(() => {
     if (!ready) return;
-    const snapshot = JSON.stringify(data);
+    const snapshot = JSON.stringify(dataForStorage(data));
     queue.current = queue.current
       .catch(() => {})
       .then(async () => {

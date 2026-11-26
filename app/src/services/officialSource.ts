@@ -69,11 +69,24 @@ export function openWebSource(url: string, alert: AlertFn, openURL: OpenFn) {
     return alert("열 수 없는 주소예요", "안전한 웹 주소(https)가 아니라 열 수 없습니다.");
   void openURL(url).catch(() => alert("열기 실패", "인터넷 연결을 확인해 주세요."));
 }
+/** WebView 의 탐색 요청 중 판단에 쓰는 값(react-native-webview ShouldStartLoadRequest 의 일부). */
+export type SuggestionRequest = { url: string; isTopFrame?: boolean; navigationType?: string };
 /**
- * Search Suggestions(WebView) 안의 탐색 규칙: 처음 HTML 을 그리는 것만 허용하고,
- * 링크(https)는 외부 브라우저로 보내며 그 밖의 탐색은 막는다.
+ * Search Suggestions(WebView) 안의 탐색 규칙.
+ * - 처음 HTML 을 그리는 한 번(about:blank·data:)만 허용하고, 그 뒤의 about:blank·data: 는 막는다.
+ * - 하위 프레임(isTopFrame=false)의 탐색은 외부로 열지 않고 막는다.
+ * - iOS 는 사용자가 링크를 탭한 경우(navigationType="click")만 외부 브라우저로 연다.
+ *   Android 는 navigationType 을 주지 않으므로 https 링크면 외부로 연다.
+ * - 그 밖의 탐색은 모두 막는다.
  */
-export function suggestionNavigation(url: string): "load" | "external" | "block" {
-  if (url === "about:blank" || url.startsWith("data:")) return "load";
+export function suggestionNavigation(
+  request: SuggestionRequest,
+  initialLoaded: boolean,
+): "load" | "external" | "block" {
+  const { url, isTopFrame, navigationType } = request;
+  const initialDocument = url === "about:blank" || url.startsWith("data:");
+  if (initialDocument) return !initialLoaded && isTopFrame !== false ? "load" : "block";
+  if (isTopFrame === false) return "block";
+  if (navigationType !== undefined && navigationType !== "click") return "block";
   return isWebUrl(url) ? "external" : "block";
 }

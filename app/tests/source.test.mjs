@@ -2,8 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { formatJudgmentDate } from "../src/domain/model.ts";
 import { confirmOpenSource, isWebUrl, openWebSource, suggestionNavigation, webSourceHostNote } from "../src/services/officialSource.ts";
-import { makeCase, resultForCase, wasWebSearchAnswer } from "../src/domain/model.ts";
-import { suggestionDocument } from "../src/components/suggestionDocument.ts";
+import { dataForStorage, initialData, makeCase, resultForCase, wasWebSearchAnswer } from "../src/domain/model.ts";
+import { suggestionDocument, suggestionHeight } from "../src/components/suggestionDocument.ts";
 
 const precedent = (id) => ({
   id, title: `${id}에 관한 판례`, caseNumber: "2020고단1", court: "대법원", judgmentDate: "20201113",
@@ -68,15 +68,54 @@ test("웹 출처 목록에 실제 이동할 도메인을 보여 준다", () => {
   assert.equal(webSourceHostNote("example.go.kr"), "도메인: example.go.kr");
 });
 
-test("Search Suggestions 안에서는 처음 그리기만 허용하고 링크는 외부로, 나머지는 막는다", () => {
-  assert.equal(suggestionNavigation("about:blank"), "load");
-  assert.equal(suggestionNavigation("https://www.google.com/search?q=x"), "external");
-  assert.equal(suggestionNavigation("http://example.com"), "block");
-  assert.equal(suggestionNavigation("javascript:alert(1)"), "block");
-  assert.equal(suggestionNavigation("intent://x"), "block");
+test("Search Suggestions 안에서는 처음 그리기 한 번만 허용하고, 탭한 https 링크만 외부로 연다", () => {
+  const link = "https://www.google.com/search?q=x";
+  // 처음 문서 로드는 한 번만
+  assert.equal(suggestionNavigation({ url: "about:blank", isTopFrame: true }, false), "load");
+  assert.equal(suggestionNavigation({ url: "about:blank", isTopFrame: true }, true), "block");
+  assert.equal(suggestionNavigation({ url: "data:text/html,x" }, true), "block");
+  assert.equal(suggestionNavigation({ url: "about:blank", isTopFrame: false }, false), "block");
+  // iOS: 탭(click)만 외부로, 스크립트 이동(other) 등은 차단
+  assert.equal(suggestionNavigation({ url: link, isTopFrame: true, navigationType: "click" }, true), "external");
+  assert.equal(suggestionNavigation({ url: link, isTopFrame: true, navigationType: "other" }, true), "block");
+  // 하위 프레임은 외부로 열지 않음
+  assert.equal(suggestionNavigation({ url: link, isTopFrame: false, navigationType: "click" }, true), "block");
+  // Android: navigationType 이 없으면 https 링크만 외부로
+  assert.equal(suggestionNavigation({ url: link, isTopFrame: true }, true), "external");
+  assert.equal(suggestionNavigation({ url: "http://example.com" }, true), "block");
+  assert.equal(suggestionNavigation({ url: "javascript:alert(1)" }, true), "block");
+  assert.equal(suggestionNavigation({ url: "intent://x" }, true), "block");
   const html = '<div class="chip"><a href="https://www.google.com/search?q=x">x</a></div>';
   assert.ok(suggestionDocument(html).includes(html));
   assert.ok(suggestionDocument(html, "_blank").includes('<base target="_blank">'));
+});
+
+test("Search Suggestions 높이 메시지는 유한한 양수만 받고 상한으로 자른다", () => {
+  assert.equal(suggestionHeight("120.2"), 121);
+  assert.equal(suggestionHeight(5000), 400);
+  for (const bad of ["abc", "Infinity", "NaN", "-5", "0", undefined, null])
+    assert.equal(suggestionHeight(bad), null, String(bad));
+});
+
+test("기기 저장 시 진행 중 상담과 예전 사건 기록에서도 웹 출처를 뺀다", () => {
+  const web = {
+    mode: "rag", summary: "웹 검색 안내", precedents: [], notice: "판례 근거 없음",
+    sources: [{ title: "a", url: "https://a.example" }], searchSuggestionsHtml: "<div>제안</div>",
+  };
+  const base = initialData();
+  const oldCase = { ...base.draft, id: "1", title: "t", memo: "", deadline: "", status: "진행 중", createdAt: "", updatedAt: "", history: [], result: web };
+  const noResult = { ...oldCase, id: "2", result: undefined };
+  const data = { ...base, draft: { ...base.draft, result: web }, cases: [oldCase, noResult] };
+  const stored = dataForStorage(data);
+  for (const result of [stored.draft.result, stored.cases[0].result]) {
+    assert.equal(result.summary, "웹 검색 안내");
+    assert.equal("sources" in result, false);
+    assert.equal("searchSuggestionsHtml" in result, false);
+    assert.equal(result.webSourcesOmitted, true);
+  }
+  assert.equal(stored.cases[1].result, undefined);
+  assert.equal(data.draft.result.sources.length, 1, "화면에 쓰는 원래 데이터는 바꾸지 않는다");
+  assert.deepEqual(JSON.parse(JSON.stringify(dataForStorage(stored))), JSON.parse(JSON.stringify(stored)), "여러 번 적용해도 같다");
 });
 
 test("사건 기록에는 웹 검색 답변 텍스트만 저장한다", () => {

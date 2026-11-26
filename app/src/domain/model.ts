@@ -109,6 +109,17 @@ export function resultForCase(result?: ConsultationResult): ConsultationResult |
   if (web) kept.webSourcesOmitted = true;
   return kept;
 }
+/**
+ * 기기에 저장하는 형태. 진행 중 상담(draft)과 사건 기록 모두 웹 출처와 Search Suggestions 를 빼고 답변 텍스트만 남긴다.
+ * 불러올 때도 한 번 적용해, 예전에 출처와 함께 저장된 사건 기록을 정리한다.
+ */
+export function dataForStorage(data: AppData): AppData {
+  return {
+    ...data,
+    draft: { ...data.draft, result: resultForCase(data.draft.result) },
+    cases: data.cases.map((c) => (c.result ? { ...c, result: resultForCase(c.result) } : c)),
+  };
+}
 /** 저장된 기록이 웹 검색 답변이었는지. 예전에 sources 와 함께 저장된 기록도 포함한다. */
 export function wasWebSearchAnswer(result?: ConsultationResult) {
   return Boolean(result && (result.webSourcesOmitted || result.sources?.length || result.searchSuggestionsHtml));
