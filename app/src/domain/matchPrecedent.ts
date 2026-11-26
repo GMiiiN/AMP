@@ -23,9 +23,9 @@ function fragments(text: string) {
   return grams;
 }
 
-export function closest<T extends { title: string; summary: string }>(
+export function ranked<T extends { title: string; summary: string }>(
   description: string, candidates: readonly T[],
-): T | undefined {
+): T[] {
   const query = fragments(description);
   const docs = candidates.map(item => ({
     item, title: fragments(item.title), body: fragments(item.title + " " + item.summary),
@@ -33,8 +33,7 @@ export function closest<T extends { title: string; summary: string }>(
   const counts = new Map<string, number>();
   for (const doc of docs) for (const gram of doc.body)
     counts.set(gram, (counts.get(gram) ?? 0) + 1);
-  let best: T | undefined;
-  let bestScore = 0;
+  const scored: { item: T; score: number }[] = [];
   for (const doc of docs) {
     let score = 0;
     let distinctive = 0;
@@ -46,10 +45,11 @@ export function closest<T extends { title: string; summary: string }>(
       score += weight * (gram.length === 3 ? 1.5 : 1) * (doc.title.has(gram) ? 2 : 1);
     }
     score /= Math.sqrt(Math.max(1, doc.body.size));
-    if (distinctive >= 2 && score > bestScore) {
-      bestScore = score;
-      best = doc.item;
-    }
+    if (distinctive >= 2 && score > 0) scored.push({ item: doc.item, score });
   }
-  return best;
+  return scored.sort((a, b) => b.score - a.score).map(entry => entry.item);
+}
+
+export function closest<T extends { title: string; summary: string }>(description: string, candidates: readonly T[]): T | undefined {
+  return ranked(description, candidates)[0];
 }

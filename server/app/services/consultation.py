@@ -39,7 +39,7 @@ async def make_result(request: ConsultationRequest, mode: str, ai: GeminiService
     if request.category == '기타':
         return await _other_category(request, mode, ai)
     if mode == 'demo':
-        return ConsultationResult(mode='demo', summary=request.description, precedents=[Precedent(**r) for r in search_catalog(request.category, request.description)], notice='수록 판례 90건에서 표현이 유사한 1건을 검색합니다. AI 분석은 포함되지 않습니다.')
+        return ConsultationResult(mode='demo', summary=request.description, precedents=[Precedent(**r) for r in search_catalog(request.category, request.description)], notice='수록 판례 90건에서 표현이 유사한 최대 3건을 검색합니다. AI 분석은 포함되지 않습니다.')
 
     try:
         store = open_store()
@@ -61,12 +61,12 @@ async def make_result(request: ConsultationRequest, mode: str, ai: GeminiService
             notice=f'{NOTICE} AI 미설정: 검색 결과만 제공합니다.')
 
     try:
-        answer = await ai.generate_answer(rag.situation_payload(request), found.records)
+        answer = await ai.generate_answer(rag.situation_payload(request), found.records[:1])
     except AiUnavailable:
         raise ai_unavailable() from None
-    cited = [r for r in found.records if r['id'] in answer.citedIds]
+    # AI 상담 요약은 1위 판례를 근거로 생성하고, 나머지는 참고 판례로 제공한다.
     return ConsultationResult(mode='rag', summary=answer.summary, searchMethod=found.method,
-                              precedents=[Precedent(**r) for r in cited], notice=f'{NOTICE} {AI_NOTICE}')
+                              precedents=[Precedent(**r) for r in found.records], notice=f'{NOTICE} {AI_NOTICE}')
 
 
 async def _other_category(request: ConsultationRequest, mode: str, ai: GeminiService | None) -> ConsultationResult:

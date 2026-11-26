@@ -1,4 +1,4 @@
-import { SimilarPrecedent } from "../components/SimilarPrecedent";
+import { SimilarPrecedents } from "../components/SimilarPrecedent";
 import { localMatch } from "../services/localMatch";
 import React, { useState, useEffect } from "react";
 import {
@@ -497,7 +497,7 @@ export function Result() {
             ))}
           </Card>
           <Card>
-            <SimilarPrecedent item={(result.mode === "demo" ? localMatch(d.category, d.description) : result.precedents)[0]} />
+            <SimilarPrecedents items={(result.mode === "demo" ? localMatch(d.category, d.description) : result.precedents)} />
             {result.searchMethod === "tfidf" && result.precedents.length ? (
               <Text style={s.small}>
                 의미 검색을 쓸 수 없어 키워드 검색으로 찾은 판례입니다.

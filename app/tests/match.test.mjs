@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { closest } from "../src/domain/matchPrecedent.ts";
+import { closest, ranked } from "../src/domain/matchPrecedent.ts";
 const catalog = JSON.parse(readFileSync(new URL("../src/domain/precedentCatalog.json", import.meta.url)));
 test("같은 분야에서도 상황과 표현에 따라 다른 판례를 반환", () => {
   const group = catalog["소음공해"];
@@ -27,4 +27,15 @@ test("9개 분야 각각 10건이며 출처와 상세본문이 일치", () => {
     }
   }
   assert.equal(ids.size, 90);
+});
+
+test("유사도순으로 최대 3건을 선택하고 기존 1위는 유지", () => {
+  const query = "중고나라 아이폰 판매 대금 송금 물건 미배송 사기";
+  const results = ranked(query, catalog["중고사기"]).slice(0, 3);
+  assert.equal(results.length, 3);
+  assert.equal(results[0].id, closest(query, catalog["중고사기"]).id);
+  assert.equal(new Set(results.map(item => item.id)).size, 3);
+  assert.deepEqual(ranked("노트북 배터리 교체", catalog["상속"]), []);
+  assert.deepEqual(ranked("", catalog["상속"]), []);
+  assert.equal(ranked(query, [catalog["중고사기"][0]]).length, 1);
 });

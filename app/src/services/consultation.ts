@@ -24,7 +24,7 @@ export const demoConsultation: ConsultationService = {
       notice:
         draft.category === "기타"
           ? "기타 분야는 판례 검색 대상에서 제외됩니다."
-          : "수록된 판례 90건 중 입력한 상황과 표현이 유사한 1건을 찾습니다. 법적 적용 여부를 판단한 결과는 아닙니다.",
+          : "수록된 판례 90건 중 입력한 상황과 표현이 유사한 최대 3건을 찾습니다. 법적 적용 여부를 판단한 결과는 아닙니다.",
     };
   },
 };
@@ -130,7 +130,7 @@ const apiConsultation: ConsultationService = {
       )
         throw Error("판례 출처 형식을 확인하지 못했습니다.");
     }
-    return { ...r, precedents: r.precedents.slice(0, 1) };
+    return { ...r, precedents: r.precedents.slice(0, 3) };
   },
 };
 export const consultationService = usesApi ? apiConsultation : demoConsultation;

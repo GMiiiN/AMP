@@ -24,3 +24,10 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(search_catalog('상속', '노트북 배터리 교체'), [])
         self.assertEqual(search_catalog('중고사기', ''), [])
         self.assertEqual(len(search_catalog('중고사기', '중고나라 아이폰 판매 대금 송금')), 1)
+
+    def test_three_results_when_relevant(self):
+        group = [r for r in records() if r['category'] == '중고사기'][:3]
+        query = ' '.join(r['title'] + ' ' + r['summary'] for r in group)
+        hits = search_catalog('중고사기', query)
+        self.assertEqual(len(hits), 3)
+        self.assertEqual(len({r['id'] for r in hits}), 3)

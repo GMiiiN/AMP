@@ -17,5 +17,5 @@ def search_catalog(category: str, description: str) -> list[dict]:
     vectorizer = TfidfVectorizer(analyzer='char', ngram_range=(2, 4))
     matrix = vectorizer.fit_transform([r['title'] + ' ' + r['summary'] for r in candidates])
     scores = (matrix @ vectorizer.transform([description]).T).toarray().ravel()
-    index = int(scores.argmax())
-    return [candidates[index]] if scores[index] >= 0.12 else []
+    ranked = sorted(range(len(candidates)), key=lambda index: float(scores[index]), reverse=True)
+    return [candidates[index] for index in ranked if scores[index] >= 0.12][:3]
