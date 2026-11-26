@@ -95,6 +95,14 @@ def normalize_web_url(value) -> str | None:
     return urlunsplit(('https', netloc, parts.path, parts.query, parts.fragment))
 
 
+def search_suggestions_html(response) -> str | None:
+    """grounding 메타데이터의 Search Suggestions HTML(searchEntryPoint.renderedContent). 없으면 None."""
+    candidates = getattr(response, 'candidates', None) or []
+    metadata = getattr(candidates[0], 'grounding_metadata', None) if candidates else None
+    html = getattr(getattr(metadata, 'search_entry_point', None), 'rendered_content', None)
+    return html if isinstance(html, str) and html.strip() else None
+
+
 def web_sources(response) -> list[WebSource]:
     """grounding 메타데이터(groundingChunks[].web)에서 유효한 https 출처를 중복 없이 최대 MAX_SOURCES건 뽑는다."""
     candidates = getattr(response, 'candidates', None) or []
@@ -169,7 +177,8 @@ class GeminiService:
         return await self._generate(GENERAL_PROMPT, {'situation': situation}, GENERAL_SCHEMA, GeneralAnswer.model_validate_json)
 
     async def generate_search_answer(self, situation: dict) -> SearchAnswer:
-        """기타 분야: Google Search grounding 으로 답하고 출처를 함께 돌려준다. 출처가 없으면 실패로 본다."""
+        """기타 분야: Google Search grounding 으로 답하고 출처와 Search Suggestions 를 함께 돌려준다.
+        약관상 웹 검색 답변은 Search Suggestions 와 함께 보여 줘야 하므로, 출처나 Search Suggestions 가 없으면 실패로 본다."""
         if self.search_blocked:
             raise AiUnavailable()
         config = types.GenerateContentConfig(system_instruction=SEARCH_PROMPT, temperature=0,
@@ -181,9 +190,10 @@ class GeminiService:
                 timeout=self.search_timeout)
             text = (response.text or '').strip()
             sources = web_sources(response)
-            if not text or not sources:
+            suggestions = search_suggestions_html(response)
+            if not text or not sources or not suggestions:
                 raise ValueError('no grounded answer')
-            return SearchAnswer(summary=text, sources=sources)
+            return SearchAnswer(summary=text, sources=sources, suggestionsHtml=suggestions)
         except (*_FAILURES, asyncio.TimeoutError) as exc:
             code = getattr(exc, 'code', '')
             if isinstance(exc, errors.APIError) and code in (403, 404):

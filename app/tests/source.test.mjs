@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatJudgmentDate } from "../src/domain/model.ts";
-import { confirmOpenSource, confirmOpenWebSource, isWebUrl } from "../src/services/officialSource.ts";
+import { confirmOpenSource, isWebUrl, openWebSource, suggestionNavigation, webSourceHostNote } from "../src/services/officialSource.ts";
+import { makeCase, resultForCase, wasWebSearchAnswer } from "../src/domain/model.ts";
+import { suggestionDocument } from "../src/components/suggestionDocument.ts";
 
 const precedent = (id) => ({
   id, title: `${id}에 관한 판례`, caseNumber: "2020고단1", court: "대법원", judgmentDate: "20201113",
@@ -40,16 +42,15 @@ test("공식 출처가 아닌 주소는 열지 않고 이유를 알린다", () =
   assert.deepEqual(opened, []);
 });
 
-test("웹 검색 출처는 https 주소만 확인 창을 거쳐 연다", () => {
+test("웹 검색 출처는 확인 창 없이 바로 열고, 검증에 실패하면 열지 않는다", () => {
   const alerts = [];
   const opened = [];
-  confirmOpenWebSource("https://example.go.kr/guide", (...args) => alerts.push(args), async (u) => opened.push(u));
-  assert.equal(alerts[0][0], "외부 페이지 열기");
-  assert.deepEqual(opened, []);
-  alerts[0][2].find((b) => b.text === "열기").onPress();
+  openWebSource("https://example.go.kr/guide", (...args) => alerts.push(args), async (u) => opened.push(u));
+  assert.deepEqual(alerts, []);
   assert.deepEqual(opened, ["https://example.go.kr/guide"]);
-  confirmOpenWebSource("http://example.com", (...args) => alerts.push(args), async (u) => opened.push(u));
-  assert.equal(alerts[1][2], undefined);
+  openWebSource("https://law.go.kr@evil.example/x", (...args) => alerts.push(args), async (u) => opened.push(u));
+  assert.equal(alerts[0][0], "열 수 없는 주소예요");
+  assert.equal(alerts[0][2], undefined);
   assert.equal(opened.length, 1);
 });
 
@@ -60,18 +61,45 @@ test("웹 검색 출처 URL 검증은 서버와 같은 규칙을 쓴다", () => 
     assert.equal(isWebUrl(bad), false, String(bad));
 });
 
-test("웹 출처 확인 창은 실제 이동할 도메인을 보여 준다", () => {
-  const alerts = [];
-  const open = async () => {};
-  confirmOpenWebSource("https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc", (...args) => alerts.push(args), open);
-  assert.match(alerts[0][1], /이동할 도메인: vertexaisearch\.cloud\.google\.com/);
-  assert.match(alerts[0][1], /최종 목적지는 열어 봐야 확인됩니다/);
-  confirmOpenWebSource("https://정부.한국/안내", (...args) => alerts.push(args), open);
-  assert.match(alerts[1][1], /이동할 도메인: xn--/);
-  assert.match(alerts[1][1], /punycode/);
-  confirmOpenWebSource("https://law.go.kr@evil.example/x", (...args) => alerts.push(args), open);
-  assert.equal(alerts[2][0], "열 수 없는 주소예요");
-  assert.equal(alerts[2][2], undefined);
+test("웹 출처 목록에 실제 이동할 도메인을 보여 준다", () => {
+  assert.match(webSourceHostNote("vertexaisearch.cloud.google.com"), /최종 목적지는 열어 봐야 확인됩니다/);
+  const idn = new URL("https://정부.한국/안내").hostname;
+  assert.match(webSourceHostNote(idn), /도메인: xn--.*punycode/);
+  assert.equal(webSourceHostNote("example.go.kr"), "도메인: example.go.kr");
+});
+
+test("Search Suggestions 안에서는 처음 그리기만 허용하고 링크는 외부로, 나머지는 막는다", () => {
+  assert.equal(suggestionNavigation("about:blank"), "load");
+  assert.equal(suggestionNavigation("https://www.google.com/search?q=x"), "external");
+  assert.equal(suggestionNavigation("http://example.com"), "block");
+  assert.equal(suggestionNavigation("javascript:alert(1)"), "block");
+  assert.equal(suggestionNavigation("intent://x"), "block");
+  const html = '<div class="chip"><a href="https://www.google.com/search?q=x">x</a></div>';
+  assert.ok(suggestionDocument(html).includes(html));
+  assert.ok(suggestionDocument(html, "_blank").includes('<base target="_blank">'));
+});
+
+test("사건 기록에는 웹 검색 답변 텍스트만 저장한다", () => {
+  const web = {
+    mode: "rag", summary: "웹 검색 안내", precedents: [], notice: "판례 근거 없음",
+    sources: [{ title: "a", url: "https://a.example" }], searchSuggestionsHtml: "<div>제안</div>",
+  };
+  const draft = {
+    category: "기타", date: "2026-01-01", amount: "", description: "상황", answers: [], evidence: [],
+    checks: [false, false, false], result: web,
+  };
+  const saved = makeCase(draft, { title: "t", memo: "", deadline: "", keepResult: true, keepEvidence: true, keepTodos: true });
+  assert.equal(saved.result.summary, "웹 검색 안내");
+  assert.equal("sources" in saved.result, false);
+  assert.equal("searchSuggestionsHtml" in saved.result, false);
+  assert.equal(saved.result.webSourcesOmitted, true);
+  assert.equal(wasWebSearchAnswer(saved.result), true);
+  assert.equal(web.sources.length, 1, "원래 결과는 바꾸지 않는다");
+  // 예전에 sources 와 함께 저장된 기록도 웹 검색 답변으로 알아본다(링크는 화면에 그리지 않음).
+  assert.equal(wasWebSearchAnswer({ ...web, searchSuggestionsHtml: undefined }), true);
+  const plain = { mode: "rag", summary: "일반 안내", precedents: [], notice: "x" };
+  assert.deepEqual(resultForCase(plain), plain);
+  assert.equal(wasWebSearchAnswer(plain), false);
 });
 
 test("판결일은 선고일자(yyyymmdd)를 점 형식으로 보여 준다", () => {

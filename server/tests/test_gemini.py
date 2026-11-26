@@ -31,12 +31,16 @@ def client_error(code, status):
     return errors.ClientError(code, {'error': {'code': code, 'message': status, 'status': status}})
 
 
-def grounded_response(text, uris):
+SUGGESTIONS_HTML = '<style>.chip{}</style><div class="chip"><a href="https://www.google.com/search?q=x">x</a></div>'
+
+
+def grounded_response(text, uris, suggestions=SUGGESTIONS_HTML):
     """실제 SDK 응답 타입(google.genai.types)으로 grounding 응답을 만든다."""
     chunks = [types.GroundingChunk(web=types.GroundingChunkWeb(uri=uri, title=f'title-{i}')) for i, uri in enumerate(uris)]
+    entry = types.SearchEntryPoint(rendered_content=suggestions) if suggestions is not None else None
     return types.GenerateContentResponse(candidates=[types.Candidate(
         content=types.Content(role='model', parts=[types.Part(text=text)]),
-        grounding_metadata=types.GroundingMetadata(grounding_chunks=chunks))])
+        grounding_metadata=types.GroundingMetadata(grounding_chunks=chunks, search_entry_point=entry))])
 
 
 class GeminiServiceTests(unittest.TestCase):
@@ -87,9 +91,17 @@ class SearchAnswerTests(unittest.TestCase):
         self.assertEqual(answer.summary, '안내')
         self.assertEqual([s.url for s in answer.sources], ['https://a.example/1', 'https://b.example/2'])
         self.assertEqual(answer.sources[0].title, 'title-0')
+        self.assertEqual(answer.suggestionsHtml, SUGGESTIONS_HTML)
         kwargs = client.aio.models.generate_content.await_args.kwargs
         self.assertEqual(kwargs['model'], 'search-model')
         self.assertIsNotNone(kwargs['config'].tools[0].google_search)
+
+    def test_answer_without_search_suggestions_is_failure(self):
+        for suggestions in (None, '   '):
+            with self.subTest(suggestions=suggestions):
+                ai, _ = service(generate=[grounded_response('안내', ['https://a.example/1'], suggestions)])
+                with self.assertRaises(AiUnavailable):
+                    asyncio.run(ai.generate_search_answer({}))
 
     def test_answer_without_grounding_sources_is_failure(self):
         ai, _ = service(generate=[grounded_response('안내', [])])

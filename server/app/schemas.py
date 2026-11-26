@@ -70,6 +70,9 @@ class ConsultationResult(BaseModel):
     searchMethod: Literal['embedding', 'tfidf'] | None = None
     # 기타 분야를 웹 검색으로 답했을 때만 채운다.
     sources: list[WebSource] = Field(default_factory=list)
+    # 웹 검색 답변과 함께 보여 줘야 하는 Google Search Suggestions HTML(searchEntryPoint.renderedContent).
+    # Gemini API 약관상 웹 검색 답변은 이 Search Suggestions 와 함께 표시한다. 일반 답변으로 대체되면 null.
+    searchSuggestionsHtml: str | None = None
 
 
 # ---------- 생성형 AI 응답 (서버 내부 검증용) ----------
@@ -86,6 +89,7 @@ class GeneralAnswer(BaseModel):
 class SearchAnswer(BaseModel):
     summary: str = Field(min_length=1, max_length=6000)
     sources: list[WebSource] = Field(min_length=1, max_length=5)
+    suggestionsHtml: str = Field(min_length=1)
 
 
 class GeneratedQuestions(BaseModel):

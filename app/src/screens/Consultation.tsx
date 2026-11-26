@@ -23,6 +23,7 @@ import {
 } from "../components/ui";
 import { SimilarPrecedent } from "../components/SimilarPrecedent";
 import { WebSources } from "../components/WebSources";
+import { SearchSuggestions } from "../components/SearchSuggestions";
 import { useApp } from "../state/AppProvider";
 import {
   categories,
@@ -485,6 +486,7 @@ export function Result() {
             <Text selectable style={[s.body, { color: C.text }]}>
               {result.summary}
             </Text>
+            <SearchSuggestions html={result.searchSuggestionsHtml} />
             <Text style={s.small}>
               {d.category} · {d.date}
               {d.amount ? ` · ${Number(d.amount).toLocaleString()}원` : ""}

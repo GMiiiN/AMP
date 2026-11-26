@@ -235,6 +235,17 @@
             },
             "type": "array",
             "title": "Sources"
+          },
+          "searchSuggestionsHtml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searchsuggestionshtml"
           }
         },
         "type": "object",

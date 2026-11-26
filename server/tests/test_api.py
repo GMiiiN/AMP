@@ -167,6 +167,7 @@ class RetrievalTests(ApiTestCase):
             data = self.client.post('/api/consultations/result', json=request).json()
         self.assertEqual(data['summary'], '웹 검색 안내')
         self.assertEqual(data['sources'], [{'title': 'example.go.kr', 'url': 'https://example.go.kr/guide'}])
+        self.assertEqual(data['searchSuggestionsHtml'], '<div class="chips">검색 제안</div>')
         self.assertEqual(data['precedents'], [])
         self.assertTrue(data['notice'].startswith('판례 근거 없음'))
         self.assertEqual([c[0] for c in ai.calls], ['search'])
@@ -204,6 +205,7 @@ class RetrievalTests(ApiTestCase):
             data = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'}).json()
         self.assertEqual(data['summary'], '일반 안내')
         self.assertEqual(data['sources'], [])
+        self.assertIsNone(data.get('searchSuggestionsHtml'))
         self.assertEqual([c.kwargs['model'] for c in client.aio.models.generate_content.await_args_list],
                          ['search-model', 'test-model'])
 
@@ -214,6 +216,7 @@ class RetrievalTests(ApiTestCase):
         self.assertEqual(data['summary'], '일반 안내')
         self.assertEqual(data['precedents'], [])
         self.assertEqual(data['sources'], [])
+        self.assertIsNone(data.get('searchSuggestionsHtml'))
         self.assertTrue(data['notice'].startswith('판례 근거 없음'))
         self.assertEqual([c[0] for c in ai.calls], ['search', 'general'])
 

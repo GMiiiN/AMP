@@ -13,9 +13,8 @@ import {
   C,
 } from "../components/ui";
 import { SimilarPrecedent } from "../components/SimilarPrecedent";
-import { WebSources } from "../components/WebSources";
 import { useApp } from "../state/AppProvider";
-import { CaseRecord, todoLabels, validDate } from "../domain/model";
+import { CaseRecord, todoLabels, validDate, wasWebSearchAnswer } from "../domain/model";
 import { CaseCard } from "./Home";
 export function Cases() {
   const { data } = useApp(),
@@ -175,7 +174,11 @@ export function CaseDetail() {
               {c.result?.summary || "저장한 결과가 없습니다."}
             </Text>
             {c.result && <SimilarPrecedent items={c.result.precedents} />}
-            <WebSources items={c.result?.sources} saved />
+            {wasWebSearchAnswer(c.result) ? (
+              <Text style={s.small}>
+                웹 검색으로 답한 결과입니다. 사건 기록에는 답변 내용만 저장하고 웹 출처와 검색 제안은 저장하지 않습니다.
+              </Text>
+            ) : null}
             <Text style={s.h2}>메모</Text>
             <Text style={s.body}>{c.memo || "메모가 없습니다."}</Text>
           </Card>

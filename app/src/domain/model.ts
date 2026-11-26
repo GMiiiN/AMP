@@ -94,7 +94,25 @@ export type ConsultationResult = {
   searchMethod?: "embedding" | "tfidf";
   /** 기타 분야를 웹 검색으로 답했을 때의 출처 */
   sources?: WebSource[];
+  /** 웹 검색 답변과 함께 보여 줘야 하는 Google Search Suggestions HTML */
+  searchSuggestionsHtml?: string | null;
+  /** 사건 기록에 저장하면서 웹 출처·Search Suggestions 를 뺐음 */
+  webSourcesOmitted?: boolean;
 };
+/** 사건 기록에는 웹 검색 답변 텍스트만 남기고 웹 출처와 Search Suggestions 는 저장하지 않는다. */
+export function resultForCase(result?: ConsultationResult): ConsultationResult | undefined {
+  if (!result) return undefined;
+  const web = Boolean(result.sources?.length || result.searchSuggestionsHtml || result.webSourcesOmitted);
+  const kept: ConsultationResult = { ...result };
+  delete kept.sources;
+  delete kept.searchSuggestionsHtml;
+  if (web) kept.webSourcesOmitted = true;
+  return kept;
+}
+/** 저장된 기록이 웹 검색 답변이었는지. 예전에 sources 와 함께 저장된 기록도 포함한다. */
+export function wasWebSearchAnswer(result?: ConsultationResult) {
+  return Boolean(result && (result.webSourcesOmitted || result.sources?.length || result.searchSuggestionsHtml));
+}
 export type QuestionMode = "generated" | "template";
 export type Draft = {
   result?: ConsultationResult;
@@ -208,7 +226,7 @@ export function makeCase(
     status: previous?.status || "진행 중",
     createdAt: previous?.createdAt || now,
     updatedAt: now,
-    result: options.keepResult ? draft.result : undefined,
+    result: options.keepResult ? resultForCase(draft.result) : undefined,
     description: options.keepResult ? draft.description : "",
     answers: options.keepResult ? [...draft.answers] : [],
     questions:

@@ -51,17 +51,29 @@ export function confirmOpenSource(url: string, alert: AlertFn, openURL: OpenFn) 
     return alert("열 수 없는 주소예요", "공식 출처(국가법령정보센터)가 아니라 열 수 없습니다.");
   confirmThenOpen(url, "국가법령정보센터 원문 페이지로 이동합니다.", alert, openURL);
 }
-/** 웹 검색 출처를 열기 전에 실제로 이동할 도메인을 보여 주는 확인 창을 띄운다. 검증을 통과하지 못하면 열지 않는다. */
-export function confirmOpenWebSource(url: string, alert: AlertFn, openURL: OpenFn) {
-  const host = webUrlHost(url);
-  if (!host)
-    return alert("열 수 없는 주소예요", "안전한 웹 주소(https)가 아니라 열 수 없습니다.");
-  // URL 이 국제화 도메인(IDN)을 punycode(xn--)로 바꿔 주므로, 비슷하게 생긴 글자로 속이는 주소도 드러난다.
-  const lines = [`이동할 도메인: ${host}`];
+/** 웹 출처 도메인 안내 문구. 확인 창 대신 목록에 그대로 보여 준다(IDN 은 URL 이 punycode(xn--)로 바꿔 준다). */
+export function webSourceHostNote(host: string) {
+  const notes = [`도메인: ${host}`];
   if (host.split(".").some((label) => label.startsWith("xn--")))
-    lines.push("국제화 도메인이라 punycode(xn--)로 표시했습니다.");
+    notes.push("국제화 도메인(punycode 표기)");
   if (host === GROUNDING_REDIRECT_HOST)
-    lines.push("Google 검색을 거쳐 이동하는 주소라 최종 목적지는 열어 봐야 확인됩니다.");
-  lines.push("Google 검색으로 찾은 외부 웹페이지입니다. 내용은 직접 확인해 주세요.");
-  confirmThenOpen(url, lines.join("\n"), alert, openURL);
+    notes.push("Google 검색을 거쳐 이동하며 최종 목적지는 열어 봐야 확인됩니다");
+  return notes.join(" · ");
+}
+/**
+ * 웹 검색 출처를 바로 연다. Gemini API 약관이 링크와 목적지 사이의 중간 화면을 금지하므로 확인 창을 두지 않는다.
+ * 검증을 통과하지 못한 주소는 열지 않고 이유만 알린다.
+ */
+export function openWebSource(url: string, alert: AlertFn, openURL: OpenFn) {
+  if (!isWebUrl(url))
+    return alert("열 수 없는 주소예요", "안전한 웹 주소(https)가 아니라 열 수 없습니다.");
+  void openURL(url).catch(() => alert("열기 실패", "인터넷 연결을 확인해 주세요."));
+}
+/**
+ * Search Suggestions(WebView) 안의 탐색 규칙: 처음 HTML 을 그리는 것만 허용하고,
+ * 링크(https)는 외부 브라우저로 보내며 그 밖의 탐색은 막는다.
+ */
+export function suggestionNavigation(url: string): "load" | "external" | "block" {
+  if (url === "about:blank" || url.startsWith("data:")) return "load";
+  return isWebUrl(url) ? "external" : "block";
 }

@@ -89,6 +89,7 @@ async def _other_category(request: ConsultationRequest, mode: str, ai: GeminiSer
     try:
         found = await ai.generate_search_answer(situation)
         return ConsultationResult(mode='rag', summary=found.summary, sources=found.sources,
+                                  searchSuggestionsHtml=found.suggestionsHtml,
                                   notice=f'판례 근거 없음: 기타 분야는 판례 검색 없이 Google 검색 결과를 참고해 안내합니다. '
                                          f'출처 링크의 내용을 직접 확인해 주세요. {NOTICE} {AI_NOTICE}')
     except AiUnavailable:

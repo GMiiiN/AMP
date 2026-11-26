@@ -54,7 +54,8 @@ class FakeAI:
         self.calls.append(('search', situation))
         if self.fail_search:
             raise AiUnavailable()
-        return SearchAnswer(summary='웹 검색 안내', sources=[WebSource(title='example.go.kr', url='https://example.go.kr/guide')])
+        return SearchAnswer(summary='웹 검색 안내', sources=[WebSource(title='example.go.kr', url='https://example.go.kr/guide')],
+                            suggestionsHtml='<div class="chips">검색 제안</div>')
 
     async def generate_general_answer(self, situation):
         self.calls.append(('general', situation))

@@ -129,6 +129,8 @@ const apiConsultation: ConsultationService = {
         ))
     )
       throw Error("웹 검색 출처 형식을 확인하지 못했습니다.");
+    if (r.searchSuggestionsHtml != null && typeof r.searchSuggestionsHtml !== "string")
+      throw Error("검색 제안 형식을 확인하지 못했습니다.");
     return r;
   },
 };
