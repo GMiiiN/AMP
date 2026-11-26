@@ -6,6 +6,7 @@ import { confirmOpenSource } from "../services/officialSource";
 
 function PrecedentItem({ item }: { item: Precedent }) {
   return <View style={{ gap: 8 }}>
+    {item.cited ? <Text style={s.badge}>답변에서 인용</Text> : null}
     <Text style={s.h2}>{item.title}</Text>
     <Text selectable style={s.small}>{item.court} · {formatJudgmentDate(item.judgmentDate)} · {item.caseNumber}</Text>
     <Text style={s.body}>{item.summary}</Text>

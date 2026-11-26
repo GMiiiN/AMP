@@ -75,6 +75,8 @@ export type Precedent = {
   judgmentDate: string;
   summary: string;
   sourceUrl: string;
+  /** rag 모드에서 AI 답변이 근거로 인용한 판례 */
+  cited?: boolean;
 };
 /** 판결일은 법령정보 API의 선고일자(yyyymmdd)로 저장한다. 화면에는 2020.11.13 형식으로 보여 준다. */
 export function formatJudgmentDate(value: string) {

@@ -1,4 +1,3 @@
-import { SimilarPrecedent } from "../components/SimilarPrecedent";
 import React, { useState } from "react";
 import { Text, View, Pressable, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -13,6 +12,7 @@ import {
   s,
   C,
 } from "../components/ui";
+import { SimilarPrecedent } from "../components/SimilarPrecedent";
 import { useApp } from "../state/AppProvider";
 import { CaseRecord, todoLabels, validDate } from "../domain/model";
 import { CaseCard } from "./Home";

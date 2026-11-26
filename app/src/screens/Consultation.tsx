@@ -1,4 +1,3 @@
-import { SimilarPrecedent } from "../components/SimilarPrecedent";
 import React, { useState, useEffect } from "react";
 import {
   Text,
@@ -22,6 +21,7 @@ import {
   s,
   C,
 } from "../components/ui";
+import { SimilarPrecedent } from "../components/SimilarPrecedent";
 import { useApp } from "../state/AppProvider";
 import {
   categories,
@@ -496,6 +496,7 @@ export function Result() {
             ))}
           </Card>
           <Card>
+            <Text style={s.badge}>02 · 관련 판례</Text>
             <SimilarPrecedent items={result.precedents} />
             {result.searchMethod === "tfidf" && result.precedents.length ? (
               <Text style={s.small}>

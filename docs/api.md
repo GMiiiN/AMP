@@ -42,12 +42,12 @@
 ### POST /api/consultations/result → 200
 
 ```json
-{"mode":"rag","summary":"AI가 정리한 요약","precedents":[{"id":"...","title":"...","caseNumber":"...","court":"대법원","judgmentDate":"20200101","summary":"판결요지","sourceUrl":"https://www.law.go.kr/..."}],"notice":"법률정보 제공이며 자문이 아닙니다. AI 요약은 원문 대조 및 전문가 검토가 필요합니다.","searchMethod":"embedding"}
+{"mode":"rag","summary":"AI가 정리한 요약","precedents":[{"id":"...","title":"...","caseNumber":"...","court":"대법원","judgmentDate":"20200101","summary":"판결요지","sourceUrl":"https://www.law.go.kr/...","cited":true}],"notice":"법률정보 제공이며 자문이 아닙니다. AI 요약은 원문 대조 및 전문가 검토가 필요합니다.","searchMethod":"embedding"}
 ```
 
-- mode=`demo`: 입력 내용 정리(외부 호출 없음). 수록 판례 90건(`data/seed/precedents90.jsonl`)에서 표현이 유사한 판례를 최대 3건 반환합니다.
+- mode=`demo`: 입력 내용 정리(외부 호출 없음). 수록 판례 90건(`data/seed/precedents90.jsonl`)에서 표현이 유사한 판례를 최대 3건 반환합니다. 기준 점수를 넘는 판례가 없으면 notice가 "판례 근거 없음"으로 시작합니다.
 - mode=`retrieval`: 판례 검색 결과만 반환하거나 근거 없음. AI 미설정.
-- mode=`rag`: 검색된 판례를 근거로 Gemini가 만든 답변. `precedents`에는 검색된 판례(최대 3건)를 유사도 순으로 모두 담습니다. 앱은 첫 건을 "가장 유사한 판례", 나머지를 "비슷한 판례"로 보여 줍니다. 검색 결과에 없는 인용 ID는 거부합니다.
+- mode=`rag`: 검색된 판례를 근거로 Gemini가 만든 답변. `precedents`에는 검색된 판례(최대 3건)를 유사도 순으로 모두 담습니다. AI 답변이 인용한 판례는 `cited: true`이며(그 밖의 모드와 판례는 `false`), 앱은 "답변에서 인용"으로 표시합니다. 앱은 첫 건을 "가장 유사한 판례", 나머지를 "비슷한 판례"로 보여 줍니다. 검색 결과에 없는 인용 ID는 거부합니다.
 - `searchMethod`(선택 필드): `embedding` 의미 검색 또는 `tfidf` 문자 검색. 임베딩을 쓸 수 없으면 `tfidf`로 대체합니다. 검색을 하지 않으면 없습니다.
 - `sourceUrl`은 국가법령정보센터 HTTPS 링크입니다. `judgmentDate`는 법령정보 API의 선고일자 그대로(yyyymmdd)이며 앱이 `2020.01.01` 형식으로 표시합니다.
 - `기타`: 판례 검색을 하지 않습니다. rag 모드에서는 Gemini가 일반 법률 정보로 답하고, notice가 "판례 근거 없음"으로 시작합니다.

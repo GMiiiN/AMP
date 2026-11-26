@@ -52,6 +52,7 @@ class Precedent(BaseModel):
     judgmentDate: str
     summary: str
     sourceUrl: str
+    cited: bool = False  # rag 모드에서 AI 답변이 근거로 인용한 판례
 
 
 class ConsultationResult(BaseModel):

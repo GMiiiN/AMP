@@ -115,6 +115,7 @@ const apiConsultation: ConsultationService = {
           "summary",
           "sourceUrl",
         ].every((k) => typeof p[k] === "string") ||
+        (p.cited !== undefined && typeof p.cited !== "boolean") ||
         !isOfficialSource(p.sourceUrl)
       )
         throw Error("판례 출처 형식을 확인하지 못했습니다.");

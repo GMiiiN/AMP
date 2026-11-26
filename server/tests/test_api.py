@@ -6,12 +6,27 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 from fastapi.testclient import TestClient
 
 from app.deps import get_ai_service
 from app.main import app
 from app.repositories.vector_store import SqliteVectorStore, build_store
 from helpers import REQUEST, FakeAI, FakeEmbedder, record
+
+
+class ScoredEmbedder(FakeEmbedder):
+    """문서마다 질의 벡터 [1,0,0,0]과의 코사인 점수가 주어진 값이 되도록 단위 벡터를 만든다."""
+
+    def __init__(self, scores):
+        self.scores = scores
+
+    def embed_documents(self, texts):
+        vectors = []
+        for text in texts:
+            score = next(v for k, v in self.scores.items() if k in text)
+            vectors.append(np.array([score, (1 - score ** 2) ** 0.5, 0, 0], dtype=np.float32))
+        return vectors
 
 
 class ApiTestCase(unittest.TestCase):
@@ -45,6 +60,11 @@ class DemoAndValidationTests(ApiTestCase):
         self.assertEqual(data['summary'], REQUEST['description'])
         self.assertTrue(1 <= len(data['precedents']) <= 3)
         self.assertEqual(data['mode'], 'demo')
+
+    def test_demo_without_match_says_no_precedent(self):
+        data = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '상속', 'description': '노트북 배터리 교체'}).json()
+        self.assertEqual(data['precedents'], [])
+        self.assertTrue(data['notice'].startswith('판례 근거 없음'))
 
     def test_validation_does_not_echo_input(self):
         secret = 'PRIVATE-EXAMPLE'
@@ -94,16 +114,21 @@ class RetrievalTests(ApiTestCase):
         self.assertEqual([r['id'] for r in found.records], ['wage'])
 
     def test_rag_flow_returns_top_three_in_similarity_order(self):
-        records = [record('wage'), record('wage-2'), record('wage-3'), record('wage-4'), record('other', summary='부동산 매매')]
-        path = self.make_index(records, FakeEmbedder())
-        ai = self.use_ai(FakeAI(cite=['wage']))
+        # 질의 벡터(임금 → 축 0)와의 코사인 점수가 서로 다른 후보를 점수 오름차순으로 넣는다.
+        # 0.50 은 기준점(0.60) 미달, 0.95·0.85·0.75·0.65 중 상위 3건만 내림차순으로 나와야 한다.
+        scores = {'s50': 0.50, 's65': 0.65, 's75': 0.75, 's85': 0.85, 's95': 0.95}
+        records = [record(id, summary=f'임금 테스트 {id}') for id in scores]
+        path = self.make_index(records, ScoredEmbedder(scores))
+        ai = self.use_ai(FakeAI(cite=['s85']))
         with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': str(path)}):
             data = self.client.post('/api/consultations/result', json=REQUEST).json()
         self.assertEqual(data['mode'], 'rag')
         self.assertEqual(data['searchMethod'], 'embedding')
         self.assertEqual(data['summary'], 'AI 요약')
-        self.assertEqual([p['id'] for p in data['precedents']], ['wage', 'wage-2', 'wage-3'])
-        self.assertEqual([p['id'] for p in ai.calls[-1][2]], ['wage', 'wage-2', 'wage-3'])
+        self.assertEqual([p['id'] for p in data['precedents']], ['s95', 's85', 's75'])
+        self.assertEqual([p['id'] for p in ai.calls[-1][2]], ['s95', 's85', 's75'])
+        # AI가 인용한 판례에만 cited 가 표시된다.
+        self.assertEqual([p['cited'] for p in data['precedents']], [False, True, False])
         self.assertIn('자문이 아닙니다', data['notice'])
         self.assertEqual([c[0] for c in ai.calls], ['embed', 'answer'])
 

@@ -30,10 +30,14 @@ test("원문을 열지 못하면 실패 안내를 띄운다", async () => {
   assert.equal(alerts[1][0], "열기 실패");
 });
 
-test("공식 출처가 아닌 주소는 확인 창도 띄우지 않는다", () => {
+test("공식 출처가 아닌 주소는 열지 않고 이유를 알린다", () => {
   const alerts = [];
-  confirmOpenSource("https://example.com/x", (...args) => alerts.push(args), async () => {});
-  assert.equal(alerts.length, 0);
+  const opened = [];
+  confirmOpenSource("https://example.com/x", (...args) => alerts.push(args), async (u) => opened.push(u));
+  assert.equal(alerts.length, 1);
+  assert.equal(alerts[0][2], undefined);
+  assert.match(alerts[0][1], /공식 출처/);
+  assert.deepEqual(opened, []);
 });
 
 test("판결일은 선고일자(yyyymmdd)를 점 형식으로 보여 준다", () => {

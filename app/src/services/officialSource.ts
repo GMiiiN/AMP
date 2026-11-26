@@ -16,7 +16,8 @@ export function confirmOpenSource(
   alert: (title: string, message?: string, buttons?: AlertButton[]) => void,
   openURL: (url: string) => Promise<unknown>,
 ) {
-  if (!isOfficialSource(url)) return;
+  if (!isOfficialSource(url))
+    return alert("열 수 없는 주소예요", "공식 출처(국가법령정보센터)가 아니라 열 수 없습니다.");
   alert("외부 페이지 열기", "국가법령정보센터 원문 페이지로 이동합니다.", [
     { text: "취소", style: "cancel" },
     {
