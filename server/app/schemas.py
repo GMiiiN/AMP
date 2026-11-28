@@ -52,6 +52,13 @@ class Precedent(BaseModel):
     judgmentDate: str
     summary: str
     sourceUrl: str
+    cited: bool = False  # rag 모드에서 AI 답변이 근거로 인용한 판례
+
+
+class WebSource(BaseModel):
+    """기타 분야 웹 검색(Google Search grounding)이 참고한 웹 문서."""
+    title: str
+    url: str
 
 
 class ConsultationResult(BaseModel):
@@ -61,6 +68,11 @@ class ConsultationResult(BaseModel):
     notice: str
     # 판례 검색에 쓴 방식. 임베딩 장애로 TF-IDF로 대체되면 'tfidf' (보고서 13장).
     searchMethod: Literal['embedding', 'tfidf'] | None = None
+    # 기타 분야를 웹 검색으로 답했을 때만 채운다.
+    sources: list[WebSource] = Field(default_factory=list)
+    # 웹 검색 답변과 함께 보여 줘야 하는 Google Search Suggestions HTML(searchEntryPoint.renderedContent).
+    # Gemini API 약관상 웹 검색 답변은 이 Search Suggestions 와 함께 표시한다. 일반 답변으로 대체되면 null.
+    searchSuggestionsHtml: str | None = None
 
 
 # ---------- 생성형 AI 응답 (서버 내부 검증용) ----------
@@ -72,6 +84,12 @@ class GeneratedAnswer(BaseModel):
 
 class GeneralAnswer(BaseModel):
     summary: str = Field(min_length=1, max_length=6000)
+
+
+class SearchAnswer(BaseModel):
+    summary: str = Field(min_length=1, max_length=6000)
+    sources: list[WebSource] = Field(min_length=1, max_length=5)
+    suggestionsHtml: str = Field(min_length=1)
 
 
 class GeneratedQuestions(BaseModel):

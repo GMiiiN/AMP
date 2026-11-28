@@ -5,7 +5,6 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
-  Linking,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +21,9 @@ import {
   s,
   C,
 } from "../components/ui";
+import { SimilarPrecedent } from "../components/SimilarPrecedent";
+import { WebSources } from "../components/WebSources";
+import { SearchSuggestions } from "../components/SearchSuggestions";
 import { useApp } from "../state/AppProvider";
 import {
   categories,
@@ -484,6 +486,7 @@ export function Result() {
             <Text selectable style={[s.body, { color: C.text }]}>
               {result.summary}
             </Text>
+            <SearchSuggestions html={result.searchSuggestionsHtml} />
             <Text style={s.small}>
               {d.category} · {d.date}
               {d.amount ? ` · ${Number(d.amount).toLocaleString()}원` : ""}
@@ -496,43 +499,9 @@ export function Result() {
             ))}
           </Card>
           <Card>
-            <Text style={s.badge}>02 · 관련 법률 · 근거 판례</Text>
-            {!result.precedents.length ? (
-              <Text style={s.h2}>판례 근거 없음</Text>
-            ) : (
-              result.precedents.map((p) => (
-                <View key={p.id} style={{ gap: 8 }}>
-                  <Text style={s.h2}>{p.title}</Text>
-                  <Text style={s.small}>
-                    {p.caseNumber} · {p.court} · {p.judgmentDate}
-                  </Text>
-                  <Text style={s.body}>{p.summary}</Text>
-                  <Button
-                    secondary
-                    label="판례 원문 보기"
-                    onPress={() =>
-                      Alert.alert(
-                        "외부 페이지 열기",
-                        "국가법령정보센터 원문 페이지로 이동합니다.",
-                        [
-                          { text: "취소", style: "cancel" },
-                          {
-                            text: "열기",
-                            onPress: () =>
-                              void Linking.openURL(p.sourceUrl).catch(() =>
-                                Alert.alert(
-                                  "열기 실패",
-                                  "원문 주소를 확인해 주세요.",
-                                ),
-                              ),
-                          },
-                        ],
-                      )
-                    }
-                  />
-                </View>
-              ))
-            )}
+            <Text style={s.badge}>02 · 관련 판례</Text>
+            <SimilarPrecedent items={result.precedents} />
+            <WebSources items={result.sources} />
             {result.searchMethod === "tfidf" && result.precedents.length ? (
               <Text style={s.small}>
                 의미 검색을 쓸 수 없어 키워드 검색으로 찾은 판례입니다.

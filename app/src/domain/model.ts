@@ -75,7 +75,16 @@ export type Precedent = {
   judgmentDate: string;
   summary: string;
   sourceUrl: string;
+  /** rag 모드에서 AI 답변이 근거로 인용한 판례 */
+  cited?: boolean;
 };
+/** 판결일은 법령정보 API의 선고일자(yyyymmdd)로 저장한다. 화면에는 2020.11.13 형식으로 보여 준다. */
+export function formatJudgmentDate(value: string) {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(value);
+  return m ? `${m[1]}.${m[2]}.${m[3]}` : value;
+}
+/** 기타 분야 웹 검색(Google Search grounding)이 참고한 웹 문서 */
+export type WebSource = { title: string; url: string };
 export type ConsultationResult = {
   mode: "demo" | "retrieval" | "rag";
   summary: string;
@@ -83,7 +92,38 @@ export type ConsultationResult = {
   notice: string;
   /** 판례 검색 방식. 임베딩을 못 쓰면 서버가 키워드(TF-IDF) 검색으로 대신한다. */
   searchMethod?: "embedding" | "tfidf";
+  /** 기타 분야를 웹 검색으로 답했을 때의 출처 */
+  sources?: WebSource[];
+  /** 웹 검색 답변과 함께 보여 줘야 하는 Google Search Suggestions HTML */
+  searchSuggestionsHtml?: string | null;
+  /** 사건 기록에 저장하면서 웹 출처·Search Suggestions 를 뺐음 */
+  webSourcesOmitted?: boolean;
 };
+/** 사건 기록에는 웹 검색 답변 텍스트만 남기고 웹 출처와 Search Suggestions 는 저장하지 않는다. */
+export function resultForCase(result?: ConsultationResult): ConsultationResult | undefined {
+  if (!result) return undefined;
+  const web = Boolean(result.sources?.length || result.searchSuggestionsHtml || result.webSourcesOmitted);
+  const kept: ConsultationResult = { ...result };
+  delete kept.sources;
+  delete kept.searchSuggestionsHtml;
+  if (web) kept.webSourcesOmitted = true;
+  return kept;
+}
+/**
+ * 기기에 저장하는 형태. 진행 중 상담(draft)과 사건 기록 모두 웹 출처와 Search Suggestions 를 빼고 답변 텍스트만 남긴다.
+ * 불러올 때도 한 번 적용해, 예전에 출처와 함께 저장된 사건 기록을 정리한다.
+ */
+export function dataForStorage(data: AppData): AppData {
+  return {
+    ...data,
+    draft: { ...data.draft, result: resultForCase(data.draft.result) },
+    cases: data.cases.map((c) => (c.result ? { ...c, result: resultForCase(c.result) } : c)),
+  };
+}
+/** 저장된 기록이 웹 검색 답변이었는지. 예전에 sources 와 함께 저장된 기록도 포함한다. */
+export function wasWebSearchAnswer(result?: ConsultationResult) {
+  return Boolean(result && (result.webSourcesOmitted || result.sources?.length || result.searchSuggestionsHtml));
+}
 export type QuestionMode = "generated" | "template";
 export type Draft = {
   result?: ConsultationResult;
@@ -197,7 +237,7 @@ export function makeCase(
     status: previous?.status || "진행 중",
     createdAt: previous?.createdAt || now,
     updatedAt: now,
-    result: options.keepResult ? draft.result : undefined,
+    result: options.keepResult ? resultForCase(draft.result) : undefined,
     description: options.keepResult ? draft.description : "",
     answers: options.keepResult ? [...draft.answers] : [],
     questions:

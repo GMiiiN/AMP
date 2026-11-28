@@ -228,6 +228,24 @@
               }
             ],
             "title": "Searchmethod"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/WebSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "searchSuggestionsHtml": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searchsuggestionshtml"
           }
         },
         "type": "object",
@@ -280,6 +298,11 @@
           "sourceUrl": {
             "type": "string",
             "title": "Sourceurl"
+          },
+          "cited": {
+            "type": "boolean",
+            "title": "Cited",
+            "default": false
           }
         },
         "type": "object",
@@ -360,6 +383,25 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WebSource": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "url"
+        ],
+        "title": "WebSource",
+        "description": "기타 분야 웹 검색(Google Search grounding)이 참고한 웹 문서."
       }
     }
   }

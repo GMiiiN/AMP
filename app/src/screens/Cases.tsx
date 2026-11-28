@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Text, View, Pressable, Alert, Linking } from "react-native";
+import { Text, View, Pressable, Alert } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   Screen,
@@ -12,10 +12,10 @@ import {
   s,
   C,
 } from "../components/ui";
+import { SimilarPrecedent } from "../components/SimilarPrecedent";
 import { useApp } from "../state/AppProvider";
-import { CaseRecord, todoLabels, validDate } from "../domain/model";
+import { CaseRecord, todoLabels, validDate, wasWebSearchAnswer } from "../domain/model";
 import { CaseCard } from "./Home";
-import { isOfficialSource } from "../services/consultation";
 export function Cases() {
   const { data } = useApp(),
     [filter, setFilter] = useState("전체");
@@ -173,24 +173,12 @@ export function CaseDetail() {
             <Text style={s.body}>
               {c.result?.summary || "저장한 결과가 없습니다."}
             </Text>
-            {c.result?.precedents.map((p) => (
-              <View key={p.id}>
-                <Text style={s.body}>
-                  {p.title} · {p.caseNumber}
-                </Text>
-                <Text style={s.small}>{p.summary}</Text>
-                <Button
-                  secondary
-                  label="원문 보기"
-                  onPress={() => {
-                    if (isOfficialSource(p.sourceUrl))
-                      void Linking.openURL(p.sourceUrl).catch(() =>
-                        Alert.alert("열기 실패"),
-                      );
-                  }}
-                />
-              </View>
-            ))}
+            {c.result && <SimilarPrecedent items={c.result.precedents} />}
+            {wasWebSearchAnswer(c.result) ? (
+              <Text style={s.small}>
+                웹 검색으로 답한 결과입니다. 사건 기록에는 답변 내용만 저장하고 웹 출처와 검색 제안은 저장하지 않습니다.
+              </Text>
+            ) : null}
             <Text style={s.h2}>메모</Text>
             <Text style={s.body}>{c.memo || "메모가 없습니다."}</Text>
           </Card>

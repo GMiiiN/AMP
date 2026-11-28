@@ -1,3 +1,4 @@
+import { isOfficialSource, isWebUrl } from "./officialSource";
 import {
   Draft,
   questions,
@@ -23,21 +24,10 @@ export const demoConsultation: ConsultationService = {
       notice:
         draft.category === "기타"
           ? "기타 분야는 판례 검색 대상에서 제외됩니다."
-          : "판례 검색 API 연결 전이므로 확인된 근거 판례가 없습니다.",
+          : "판례 검색은 서버에서 합니다. 서버 없이 앱만 실행한 데모에서는 판례가 나오지 않습니다.",
     };
   },
 };
-export function isOfficialSource(value: string) {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === "https:" &&
-      ["www.law.go.kr", "law.go.kr"].includes(url.hostname)
-    );
-  } catch {
-    return false;
-  }
-}
 /** 화면에 그대로 보여 줄 수 있는 문구를 담은 오류. */
 export class ConsultationError extends Error {}
 export function requestBody(draft: Draft) {
@@ -125,10 +115,22 @@ const apiConsultation: ConsultationService = {
           "summary",
           "sourceUrl",
         ].every((k) => typeof p[k] === "string") ||
+        (p.cited !== undefined && typeof p.cited !== "boolean") ||
         !isOfficialSource(p.sourceUrl)
       )
         throw Error("판례 출처 형식을 확인하지 못했습니다.");
     }
+    if (
+      r.sources !== undefined &&
+      (!Array.isArray(r.sources) ||
+        r.sources.some(
+          (x: { title?: unknown; url?: unknown } | null) =>
+            typeof x?.title !== "string" || !isWebUrl(x?.url),
+        ))
+    )
+      throw Error("웹 검색 출처 형식을 확인하지 못했습니다.");
+    if (r.searchSuggestionsHtml != null && typeof r.searchSuggestionsHtml !== "string")
+      throw Error("검색 제안 형식을 확인하지 못했습니다.");
     return r;
   },
 };

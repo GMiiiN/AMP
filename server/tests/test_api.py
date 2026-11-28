@@ -1,17 +1,35 @@
+import asyncio
 import importlib.util
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import numpy as np
 from fastapi.testclient import TestClient
 
 from app.deps import get_ai_service
 from app.main import app
 from app.repositories.vector_store import SqliteVectorStore, build_store
+from app.services.gemini import GeminiService
 from helpers import REQUEST, FakeAI, FakeEmbedder, record
+
+
+class ScoredEmbedder(FakeEmbedder):
+    """문서마다 질의 벡터 [1,0,0,0]과의 코사인 점수가 주어진 값이 되도록 단위 벡터를 만든다."""
+
+    def __init__(self, scores):
+        self.scores = scores
+
+    def embed_documents(self, texts):
+        vectors = []
+        for text in texts:
+            score = next(v for k, v in self.scores.items() if k in text)
+            vectors.append(np.array([score, (1 - score ** 2) ** 0.5, 0, 0], dtype=np.float32))
+        return vectors
 
 
 class ApiTestCase(unittest.TestCase):
@@ -43,8 +61,13 @@ class DemoAndValidationTests(ApiTestCase):
         self.assertEqual(questions['mode'], 'template')
         data = self.client.post('/api/consultations/result', json=REQUEST).json()
         self.assertEqual(data['summary'], REQUEST['description'])
-        self.assertEqual(data['precedents'], [])
+        self.assertTrue(1 <= len(data['precedents']) <= 3)
         self.assertEqual(data['mode'], 'demo')
+
+    def test_demo_without_match_says_no_precedent(self):
+        data = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '상속', 'description': '노트북 배터리 교체'}).json()
+        self.assertEqual(data['precedents'], [])
+        self.assertTrue(data['notice'].startswith('판례 근거 없음'))
 
     def test_validation_does_not_echo_input(self):
         secret = 'PRIVATE-EXAMPLE'
@@ -93,15 +116,22 @@ class RetrievalTests(ApiTestCase):
         self.assertEqual(found.method, 'embedding')
         self.assertEqual([r['id'] for r in found.records], ['wage'])
 
-    def test_rag_flow_with_embedding_and_citation_filter(self):
-        path = self.make_index([record('wage'), record('wage-2')], FakeEmbedder())
-        ai = self.use_ai(FakeAI(cite=['wage-2']))
+    def test_rag_flow_returns_top_three_in_similarity_order(self):
+        # 질의 벡터(임금 → 축 0)와의 코사인 점수가 서로 다른 후보를 점수 오름차순으로 넣는다.
+        # 0.50 은 기준점(0.60) 미달, 0.95·0.85·0.75·0.65 중 상위 3건만 내림차순으로 나와야 한다.
+        scores = {'s50': 0.50, 's65': 0.65, 's75': 0.75, 's85': 0.85, 's95': 0.95}
+        records = [record(id, summary=f'임금 테스트 {id}') for id in scores]
+        path = self.make_index(records, ScoredEmbedder(scores))
+        ai = self.use_ai(FakeAI(cite=['s85']))
         with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': str(path)}):
             data = self.client.post('/api/consultations/result', json=REQUEST).json()
         self.assertEqual(data['mode'], 'rag')
         self.assertEqual(data['searchMethod'], 'embedding')
         self.assertEqual(data['summary'], 'AI 요약')
-        self.assertEqual([p['id'] for p in data['precedents']], ['wage-2'])
+        self.assertEqual([p['id'] for p in data['precedents']], ['s95', 's85', 's75'])
+        self.assertEqual([p['id'] for p in ai.calls[-1][2]], ['s95', 's85', 's75'])
+        # AI가 인용한 판례에만 cited 가 표시된다.
+        self.assertEqual([p['cited'] for p in data['precedents']], [False, True, False])
         self.assertIn('자문이 아닙니다', data['notice'])
         self.assertEqual([c[0] for c in ai.calls], ['embed', 'answer'])
 
@@ -130,14 +160,65 @@ class RetrievalTests(ApiTestCase):
         self.assertTrue(data['notice'].startswith('판례 근거 없음'))
         self.assertNotIn('answer', [c[0] for c in ai.calls])
 
-    def test_other_category_general_answer_without_search(self):
+    def test_other_category_web_search_answer_with_sources(self):
         ai = self.use_ai(FakeAI())
+        request = {**REQUEST, 'category': '기타', 'description': '연락처 010-1234-5678 로 계속 독촉 문자가 옵니다'}
+        with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            data = self.client.post('/api/consultations/result', json=request).json()
+        self.assertEqual(data['summary'], '웹 검색 안내')
+        self.assertEqual(data['sources'], [{'title': 'example.go.kr', 'url': 'https://example.go.kr/guide'}])
+        self.assertEqual(data['searchSuggestionsHtml'], '<div class="chips">검색 제안</div>')
+        self.assertEqual(data['precedents'], [])
+        self.assertTrue(data['notice'].startswith('판례 근거 없음'))
+        self.assertEqual([c[0] for c in ai.calls], ['search'])
+        # 웹 검색 모델에도 개인정보를 가린 상황만 보낸다.
+        self.assertNotIn('010-1234-5678', json.dumps(ai.calls[0][1], ensure_ascii=False))
+
+    def test_other_category_both_answers_fail_returns_retry_error(self):
+        self.use_ai(FakeAI(fail_search=True, fail_generate=True))
+        with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            response = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'})
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()['error']['code'], 'AI_UNAVAILABLE')
+
+    def test_other_category_general_answer_over_budget_returns_retry_error(self):
+        class SlowGeneral(FakeAI):
+            async def generate_general_answer(self, situation):
+                await asyncio.sleep(1)
+        self.use_ai(SlowGeneral(fail_search=True))
+        with patch('app.services.consultation.OTHER_CATEGORY_BUDGET_SECONDS', 0.01), \
+                patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            response = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'})
+        self.assertEqual(response.status_code, 502)
+
+    def test_other_category_search_timeout_falls_back_to_general_answer(self):
+        # 실제 GeminiService 에 가짜 클라이언트를 넣어, 검색 모델 호출만 시간 초과시키고 일반 답변은 성공시킨다.
+        async def generate(model, contents, config):
+            if model == 'search-model':
+                await asyncio.sleep(1)
+            return SimpleNamespace(text=json.dumps({'summary': '일반 안내'}, ensure_ascii=False))
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(side_effect=generate)
+        self.use_ai(GeminiService('unused', 'test-model', retry_delay=0, client=client,
+                                  search_model='search-model', search_timeout_ms=10))
+        with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
+            data = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'}).json()
+        self.assertEqual(data['summary'], '일반 안내')
+        self.assertEqual(data['sources'], [])
+        self.assertIsNone(data.get('searchSuggestionsHtml'))
+        self.assertEqual([c.kwargs['model'] for c in client.aio.models.generate_content.await_args_list],
+                         ['search-model', 'test-model'])
+
+    def test_other_category_falls_back_to_general_answer_when_search_fails(self):
+        ai = self.use_ai(FakeAI(fail_search=True))
         with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': '/nonexistent/test.sqlite3'}):
             data = self.client.post('/api/consultations/result', json={**REQUEST, 'category': '기타'}).json()
         self.assertEqual(data['summary'], '일반 안내')
         self.assertEqual(data['precedents'], [])
+        self.assertEqual(data['sources'], [])
+        self.assertIsNone(data.get('searchSuggestionsHtml'))
         self.assertTrue(data['notice'].startswith('판례 근거 없음'))
-        self.assertEqual([c[0] for c in ai.calls], ['general'])
+        self.assertEqual([c[0] for c in ai.calls], ['search', 'general'])
 
 
 class QuestionTests(ApiTestCase):
