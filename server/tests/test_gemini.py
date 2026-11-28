@@ -97,7 +97,7 @@ class TimeBudgetTests(unittest.TestCase):
         started = time.monotonic()
         with self.assertRaises(AiUnavailable):
             asyncio.run(ai.generate_questions({}))
-        self.assertLess(time.monotonic() - started, 1)
+        self.assertLess(time.monotonic() - started, 0.5)
 
     def test_slow_first_attempt_leaves_time_for_retry(self):
         calls = []
@@ -111,6 +111,34 @@ class TimeBudgetTests(unittest.TestCase):
         ai.generate_budget = 1
         self.assertEqual(len(asyncio.run(ai.generate_questions({}))), 2)
 
+    def test_retry_delay_never_exceeds_budget(self):
+        # 1차 시도가 예산을 다 쓰면 재시도 대기(retry_delay)를 하지 않고 바로 끝내야 한다.
+        async def hang(**kwargs):
+            await asyncio.sleep(10)
+        for kind in ('generate', 'embed'):
+            with self.subTest(kind=kind):
+                ai, client = service(**{kind: hang})
+                ai.retry_delay = 1
+                ai.generate_budget = ai.embed_query_budget = 0.05
+                call = ai.generate_questions({}) if kind == 'generate' else ai.embed_query('질의')
+                started = time.monotonic()
+                with self.assertRaises(AiUnavailable):
+                    asyncio.run(call)
+                self.assertLess(time.monotonic() - started, 0.5)
+                method = client.aio.models.generate_content if kind == 'generate' else client.aio.models.embed_content
+                self.assertEqual(method.await_count, 1)
+
+    def test_retry_skipped_when_delay_would_pass_deadline(self):
+        # 1차가 빨리 실패해도 남은 시간이 retry_delay 이하면 재시도하지 않는다.
+        ai, client = service(generate=[quota_error(), text_response({'questions': ['첫 질문인가요?', '둘째 질문인가요?']})])
+        ai.retry_delay = 1
+        ai.generate_budget = 0.5
+        started = time.monotonic()
+        with self.assertRaises(AiUnavailable):
+            asyncio.run(ai.generate_questions({}))
+        self.assertLess(time.monotonic() - started, 0.5)
+        self.assertEqual(client.aio.models.generate_content.await_count, 1)
+
     def test_hanging_embed_query_stops_at_budget(self):
         async def hang(**kwargs):
             await asyncio.sleep(10)
@@ -119,7 +147,7 @@ class TimeBudgetTests(unittest.TestCase):
         started = time.monotonic()
         with self.assertRaises(AiUnavailable):
             asyncio.run(ai.embed_query('질의'))
-        self.assertLess(time.monotonic() - started, 1)
+        self.assertLess(time.monotonic() - started, 0.5)
 
 
 class SearchAnswerTests(unittest.TestCase):

@@ -152,6 +152,9 @@ class GeminiService:
         deadline = time.monotonic() + self.generate_budget
         for attempt in (1, 2):
             if attempt == 2:
+                # 재시도 대기 후 남는 시간이 없으면 기다리지 않고 끝낸다. 설정값과 무관하게 전체 상한을 지킨다.
+                if deadline - time.monotonic() <= self.retry_delay:
+                    break
                 await asyncio.sleep(self.retry_delay)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -229,6 +232,9 @@ class GeminiService:
         deadline = time.monotonic() + self.embed_query_budget
         for attempt in (1, 2):
             if attempt == 2:
+                # 재시도 대기 후 남는 시간이 없으면 기다리지 않고 끝낸다. 설정값과 무관하게 전체 상한을 지킨다.
+                if deadline - time.monotonic() <= self.retry_delay:
+                    break
                 await asyncio.sleep(self.retry_delay)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
