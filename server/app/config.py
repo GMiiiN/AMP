@@ -43,10 +43,11 @@ def vector_db_path() -> Path:
 def gemini_settings() -> dict:
     return {
         'api_key': env('GEMINI_API_KEY'),
-        'model': env('GEMINI_MODEL', 'gemini-3.8-flash'),
+        'model': env('GEMINI_MODEL', 'gemini-3.6-flash'),
         'embedding_model': env('GEMINI_EMBEDDING_MODEL', 'gemini-embedding-001'),
         'dimensions': env_int('GEMINI_EMBEDDING_DIMENSIONS', 768),
-        'timeout_ms': env_int('GEMINI_TIMEOUT_MS', 45000),
+        # 요청 1회의 HTTP 제한. 재시도까지 합친 전체 대기는 gemini.py 의 *_BUDGET_SECONDS 가 따로 묶는다.
+        'timeout_ms': env_int('GEMINI_TIMEOUT_MS', 20000),
         'retry_delay': env_float('GEMINI_RETRY_DELAY_SECONDS', 1.0),
         # 기타 분야 웹 검색 전용. 무료 등급에서 Google Search grounding을 쓸 수 있는 모델(하루 500건).
         'search_model': env('GEMINI_SEARCH_MODEL', 'gemini-2.5-flash-lite'),
