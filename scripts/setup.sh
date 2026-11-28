@@ -8,7 +8,8 @@
 #   3) server/.venv 생성 + pip install -r requirements.txt   (--skip-server 로 건너뜀)
 #   4) app 폴더에서 npm ci                                    (--skip-app 으로 건너뜀)
 #   5) scripts/check_env.py 로 환경 점검                       (--skip-check 로 건너뜀)
-# 비밀 값(server/.env 의 키)과 판례 DB는 만들지 않습니다. 팀 비공개 Drive에서 받아 넣으세요(docs/SETUP.md).
+# 비밀 값(server/.env 의 GEMINI_API_KEY)은 만들지 않습니다. 팀장에게 받은 .env 를 server/.env 에 두세요(README.md).
+# 판례 DB(data/vector_db/precedents.sqlite3)는 저장소에 포함되어 있습니다.
 #
 # 사용 예
 #   bash scripts/setup.sh

@@ -215,7 +215,7 @@ def check_database(settings: ServerSettings, mode: str, has_key: bool) -> None:
     if not path.is_file():
         if mode == 'rag':
             report('FAIL', f'{label}: 없음. rag 모드의 상담 결과 요청이 503 INDEX_UNAVAILABLE 로 실패합니다. '
-                           '팀 비공개 Drive에서 받아 data/vector_db/ 에 두세요.')
+                           '저장소에 포함된 파일입니다. git pull 또는 git checkout -- data/vector_db/precedents.sqlite3 로 되살리세요.')
         else:
             report('INFO', f'{label}: 없음 (demo 모드에서는 쓰지 않음, rag 전환 시 필요)')
         return

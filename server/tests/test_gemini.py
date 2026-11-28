@@ -1,6 +1,7 @@
 """GeminiService 단위 시험. 실제 API 대신 가짜 클라이언트를 넣어 한도를 쓰지 않는다."""
 import asyncio
 import json
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -8,7 +9,8 @@ from unittest.mock import AsyncMock, MagicMock
 import numpy as np
 from google.genai import errors, types
 
-from app.services.gemini import AiUnavailable, GeminiService, normalize_web_url
+from app.services.gemini import (EMBED_QUERY_BUDGET_SECONDS, GENERATE_BUDGET_SECONDS, AiUnavailable, GeminiService,
+                                 normalize_web_url)
 from helpers import record
 
 
@@ -78,6 +80,46 @@ class GeminiServiceTests(unittest.TestCase):
         with self.assertRaises(AiUnavailable):
             asyncio.run(ai.embed_query('질의'))
 
+
+
+class TimeBudgetTests(unittest.TestCase):
+    """Gemini가 응답하지 않아도 재시도 포함 전체 대기가 상한 안에 끝나 대체 응답을 앱 제한(60초) 안에 줄 수 있다."""
+
+    def test_budgets_fit_app_limit(self):
+        # 상담 결과 요청은 질의 임베딩 → 답변 생성을 차례로 부른다. 앱 제한 60초보다 여유 있게 작아야 한다.
+        self.assertLessEqual(EMBED_QUERY_BUDGET_SECONDS + GENERATE_BUDGET_SECONDS, 55)
+
+    def test_hanging_generate_stops_at_budget(self):
+        async def hang(**kwargs):
+            await asyncio.sleep(10)
+        ai, client = service(generate=hang)
+        ai.generate_budget = 0.05
+        started = time.monotonic()
+        with self.assertRaises(AiUnavailable):
+            asyncio.run(ai.generate_questions({}))
+        self.assertLess(time.monotonic() - started, 1)
+
+    def test_slow_first_attempt_leaves_time_for_retry(self):
+        calls = []
+
+        async def first_slow(**kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise quota_error()
+            return text_response({'questions': ['첫 질문인가요?', '둘째 질문인가요?']})
+        ai, _ = service(generate=first_slow)
+        ai.generate_budget = 1
+        self.assertEqual(len(asyncio.run(ai.generate_questions({}))), 2)
+
+    def test_hanging_embed_query_stops_at_budget(self):
+        async def hang(**kwargs):
+            await asyncio.sleep(10)
+        ai, _ = service(embed=hang)
+        ai.embed_query_budget = 0.05
+        started = time.monotonic()
+        with self.assertRaises(AiUnavailable):
+            asyncio.run(ai.embed_query('질의'))
+        self.assertLess(time.monotonic() - started, 1)
 
 
 class SearchAnswerTests(unittest.TestCase):

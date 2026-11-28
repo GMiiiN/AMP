@@ -63,18 +63,20 @@ npx expo start --clear
 - 다시 실행해도 안전합니다(`.env`를 덮어쓰지 않고 venv를 재사용). 단 `npm ci`는 `node_modules`를 새로 설치하므로 필요 없으면 `-SkipApp`을 붙입니다.
 - PowerShell에서 "스크립트를 실행할 수 없습니다" 오류가 나면 위처럼 `-ExecutionPolicy Bypass -File`로 실행합니다.
 
-### 비밀 값·판례 DB는 git 밖(비공개 Drive)에서 받기
+### 비밀 키는 git 밖에서 받기, 판례 DB는 저장소에 포함
 
-키(`GEMINI_API_KEY`, `LAW_API_OC`)와 판례 DB(`precedents.sqlite3`)는 `.gitignore` 대상이라 저장소에 없습니다. **팀 비공개 Drive**에서 받아 아래 위치에 둡니다.
+비밀 키는 `GEMINI_API_KEY` 하나입니다. 팀장에게 받은 `.env` 파일을 **`server/.env`** 에 둡니다(`.gitignore` 대상이라 커밋되지 않음). 판례 DB `data/vector_db/precedents.sqlite3`(90건, 임베딩 포함)는 저장소에 들어 있어 따로 받을 필요가 없습니다.
 
 | 받을 것 | 둘 위치 | 필요한 경우 |
 |---|---|---|
-| 키 값 | `server/.env`의 `GEMINI_API_KEY=`, `LAW_API_OC=` 뒤 | rag 모드 서버(키 보유 노트북 1대), 판례 수집(4장) |
-| 판례 DB `precedents.sqlite3` | `data/vector_db/precedents.sqlite3` | rag 모드 서버 |
+| `.env` (`GEMINI_API_KEY` 포함) | `server/.env` | rag 모드 서버 |
+| 판례 DB | 이미 `data/vector_db/precedents.sqlite3`에 있음 | rag 모드 서버 |
 
-- setup 스크립트가 만든 `server/.env`에 값만 붙여 넣습니다. Drive의 `.env` 파일로 통째로 바꿨다면 `CONSULTATION_MODE` 값을 확인합니다.
-- 키는 메신저·이슈·커밋·스크린숏에 붙이지 않고, `app/.env`의 `EXPO_PUBLIC_*`(앱 번들에 그대로 들어감)에도 넣지 않습니다. Drive 링크는 팀원끼리만 공유합니다.
-- 넣은 뒤 저장소 루트에서 `python scripts/check_env.py`(macOS는 `python3`)로 확인합니다. demo 모드는 키와 DB 없이 동작합니다.
+- 받은 `.env`를 `server/.env`로 먼저 두고 setup 스크립트를 실행하면 덮어쓰지 않습니다. setup이 먼저 만들었다면 받은 파일로 바꿉니다. `CONSULTATION_MODE` 값을 확인합니다.
+- `.env`의 값이 코드 기본값보다 우선합니다. 받은 `.env`에 `GEMINI_MODEL=gemini-3.8-flash`가 있으면 504가 잦으므로 `gemini-3.6-flash`로 바꾸거나 그 줄을 지웁니다(기본값 `gemini-3.6-flash`).
+- `LAW_API_OC`는 판례 수집(4장)에만 쓰며 지금은 필요 없습니다.
+- 키는 메신저·이슈·커밋·스크린숏에 붙이지 않고, `app/.env`의 `EXPO_PUBLIC_*`(앱 번들에 그대로 들어감)에도 넣지 않습니다.
+- 넣은 뒤 저장소 루트에서 `python scripts/check_env.py`(macOS는 `python3`)로 확인합니다. demo 모드는 키 없이 동작합니다.
 
 ## 1. 모바일 앱 실행 — 서버 없이 먼저 체험
 
@@ -244,7 +246,7 @@ npm run export:ios
 
 **2단계: 키 보유 노트북 1대만 rag, 나머지는 그 서버로 연결**
 
-1. 서버 PC(키 보유 노트북): 비공개 Drive에서 받은 키를 `server/.env`에, DB를 `data/vector_db/`에 둡니다(0장). `CONSULTATION_MODE=rag`로 바꾸고 서버를 다시 시작합니다.
+1. 서버 PC(키 보유 노트북): 받은 `.env`를 `server/.env`에 둡니다(0장, 판례 DB는 저장소에 포함). `CONSULTATION_MODE=rag`로 바꾸고 서버를 다시 시작합니다.
 2. 서버 PC에서 `check_env.py --health`로 `mode=rag`, 판례 DB 있음, `GEMINI_API_KEY` 있음을 확인하고, setup 출력의 "탐지한 IPv4"(또는 `ipconfig`)를 팀원에게 알립니다.
 3. 나머지 노트북: 자기 서버는 끄고, 앱 주소만 서버 PC로 바꿉니다.
 

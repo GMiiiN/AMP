@@ -236,6 +236,23 @@ class QuestionTests(ApiTestCase):
         self.assertEqual(data['mode'], 'template')
         self.assertEqual(data['questions'][0], '약속한 급여와 지급일을 확인할 수 있나요?')
 
+    def test_hanging_gemini_still_returns_fallbacks(self):
+        # 실제 GeminiService 에 응답하지 않는 클라이언트를 넣는다. 질문은 고정 질문으로, 결과는 TF-IDF 검색 후 재시도 오류로 끝나야 한다.
+        async def hang(**kwargs):
+            await asyncio.sleep(10)
+        client = MagicMock()
+        client.aio.models.generate_content = AsyncMock(side_effect=hang)
+        client.aio.models.embed_content = AsyncMock(side_effect=hang)
+        ai = self.use_ai(GeminiService('unused', 'test-model', dimensions=4, retry_delay=0, client=client))
+        ai.generate_budget = ai.embed_query_budget = 0.05
+        self.assertEqual(self.client.post('/api/consultations/questions', json=REQUEST).json()['mode'], 'template')
+        path = self.make_index([record()], FakeEmbedder())
+        with patch.dict(os.environ, {'CONSULTATION_MODE': 'rag', 'VECTOR_DB_PATH': str(path)}):
+            response = self.client.post('/api/consultations/result', json=REQUEST)
+        self.assertEqual(response.status_code, 502)
+        self.assertEqual(response.json()['error']['code'], 'AI_UNAVAILABLE')
+        self.assertEqual(client.aio.models.embed_content.await_count, 1)
+
     def test_questions_are_paired_with_answers(self):
         path = self.make_index([record()])
         ai = self.use_ai(FakeAI())

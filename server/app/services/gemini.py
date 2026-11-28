@@ -6,6 +6,8 @@
   검색 호출은 search_timeout_ms 안에 끝나지 않으면 실패로 본다. 403/404(모델 접근 거부)를 한 번 받으면 프로세스가 도는 동안 검색을 건너뛴다.
 - 임베딩: gemini-embedding-001, 768차원. 768차원 출력은 정규화되어 있지 않으므로 서버에서 정규화한다.
 - 실패(한도 초과 429, 서버 오류, 형식 오류, 모르는 인용 ID)는 1회 재시도하고, 그래도 실패하면 AiUnavailable.
+- 앱 요청 제한(60초) 안에 대체 응답이 닿도록 호출 1건(재시도 포함)의 전체 대기 시간을 코드에서 묶는다.
+  .env 의 GEMINI_TIMEOUT_MS 가 커도 이 상한을 넘지 않는다.
 - 사용자 입력은 호출 전에 privacy.mask_text 로 가린 상태여야 한다(호출하는 쪽 책임).
 """
 import asyncio
@@ -29,6 +31,10 @@ T = TypeVar('T')
 # gemini-embedding-001 최대 입력은 2,048 토큰. 한국어 기준으로 넉넉히 문자 수로 자른다(앞부분 유지).
 MAX_EMBED_CHARS = 2000
 EMBED_BATCH_SIZE = 50
+# 호출 1건(재시도 포함)에 쓰는 최대 시간(초). 상담 결과 요청은 질의 임베딩 + 답변 생성을 차례로 부르므로
+# 둘의 합(50초)이 앱 요청 제한 60초(app/src/services/consultation.ts)보다 작아야 한다.
+GENERATE_BUDGET_SECONDS = 40.0
+EMBED_QUERY_BUDGET_SECONDS = 10.0
 
 _FAILURES = (errors.APIError, httpx.HTTPError, ValidationError, ValueError, TypeError, KeyError)
 
@@ -125,7 +131,7 @@ def normalize(vector) -> np.ndarray:
 
 class GeminiService:
     def __init__(self, api_key: str, model: str, embedding_model: str = 'gemini-embedding-001', dimensions: int = 768,
-                 timeout_ms: int = 45000, retry_delay: float = 1.0, client: genai.Client | None = None,
+                 timeout_ms: int = 20000, retry_delay: float = 1.0, client: genai.Client | None = None,
                  search_model: str = 'gemini-2.5-flash-lite', search_timeout_ms: int = 15000):
         self.model = model
         self.search_model = search_model
@@ -134,6 +140,8 @@ class GeminiService:
         self.embedding_model = embedding_model
         self.dimensions = dimensions
         self.retry_delay = retry_delay
+        self.generate_budget = GENERATE_BUDGET_SECONDS
+        self.embed_query_budget = EMBED_QUERY_BUDGET_SECONDS
         self.client = client or genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=timeout_ms))
 
     # ---------- 생성 ----------
@@ -141,15 +149,20 @@ class GeminiService:
     async def _generate(self, system: str, payload: dict, schema: dict, parse: Callable[[str], T]) -> T:
         config = types.GenerateContentConfig(system_instruction=system, temperature=0, response_mime_type='application/json', response_json_schema=schema)
         contents = json.dumps(payload, ensure_ascii=False)
+        deadline = time.monotonic() + self.generate_budget
         for attempt in (1, 2):
             if attempt == 2:
                 await asyncio.sleep(self.retry_delay)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             try:
-                response = await self.client.aio.models.generate_content(model=self.model, contents=contents, config=config)
+                response = await asyncio.wait_for(
+                    self.client.aio.models.generate_content(model=self.model, contents=contents, config=config), timeout=remaining)
                 if not response.text:
                     raise ValueError('empty response')
                 return parse(response.text)
-            except _FAILURES as exc:
+            except (*_FAILURES, asyncio.TimeoutError) as exc:
                 # 응답·입력 원문은 남기지 않는다.
                 logger.warning('gemini generate failed attempt=%d type=%s code=%s', attempt, type(exc).__name__, getattr(exc, 'code', ''))
         raise AiUnavailable()
@@ -213,14 +226,19 @@ class GeminiService:
         return vectors
 
     async def embed_query(self, text: str) -> np.ndarray:
+        deadline = time.monotonic() + self.embed_query_budget
         for attempt in (1, 2):
             if attempt == 2:
                 await asyncio.sleep(self.retry_delay)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
             try:
-                response = await self.client.aio.models.embed_content(
-                    model=self.embedding_model, contents=[text[:MAX_EMBED_CHARS]], config=self._embed_config('RETRIEVAL_QUERY'))
+                response = await asyncio.wait_for(self.client.aio.models.embed_content(
+                    model=self.embedding_model, contents=[text[:MAX_EMBED_CHARS]], config=self._embed_config('RETRIEVAL_QUERY')),
+                    timeout=remaining)
                 return self._vectors(response, 1)[0]
-            except _FAILURES as exc:
+            except (*_FAILURES, asyncio.TimeoutError) as exc:
                 logger.warning('gemini embed failed attempt=%d type=%s code=%s', attempt, type(exc).__name__, getattr(exc, 'code', ''))
         raise AiUnavailable()
 
